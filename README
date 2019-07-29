@@ -1,9 +1,9 @@
-This repo contains a server and application. To run the Flask server:
+This repo contains a server and application. To run the Flask server from /video_server:
 export FLASK_APP=test.py
 flask run --host=0.0.0.0
 
 Your flask app will be running on :5000
 
-To run baby-app: 
+To run the client app from /baby-app: 
 npm install
 npm start
