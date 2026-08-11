@@ -25,7 +25,13 @@ import {
   H264Profile,
 } from "@homebridge/hap-nodejs";
 
-import { LEVEL_NAMES, PROFILE_NAMES, samplerateHz } from "../src/camera/recordingDelegate.js";
+import type { Mp4Unit } from "../src/camera/mp4.js";
+import {
+  LEVEL_NAMES,
+  PROFILE_NAMES,
+  samplerateHz,
+  toPackets,
+} from "../src/camera/recordingDelegate.js";
 
 describe("the two sample-rate enums", () => {
   it("recording rates are indices, not kilohertz", () => {
@@ -104,5 +110,80 @@ describe("H.264 profile and level tables", () => {
     const levels = Object.values(H264Level).filter((v) => typeof v === "number");
     assert.equal(PROFILE_NAMES.length, profiles.length);
     assert.equal(LEVEL_NAMES.length, levels.length);
+  });
+});
+
+describe("toPackets", () => {
+  const init = (): Mp4Unit => ({
+    kind: "initialization",
+    data: Buffer.from("init"),
+    types: ["ftyp", "moov"],
+  });
+  const fragment = (n: number): Mp4Unit => ({
+    kind: "fragment",
+    data: Buffer.from(`frag${n}`),
+    types: ["moof", "mdat"],
+  });
+
+  async function* stream(...units: Mp4Unit[]): AsyncGenerator<Mp4Unit> {
+    for (const unit of units) {
+      yield unit;
+    }
+  }
+
+  const collect = async (source: AsyncIterable<Mp4Unit>, stop: () => boolean = () => false) => {
+    const out = [];
+    for await (const packet of toPackets(source, stop)) {
+      out.push(packet);
+    }
+    return out;
+  };
+
+  it("marks a last packet when the source ends on its own", async () => {
+    // The bug: ffmpeg exits, the generator returns having never set isLast,
+    // and HAP-NodeJS discards the whole recording. Not a short clip in the
+    // Home app — no clip at all, for a moment something happened in the room.
+    const packets = await collect(stream(init(), fragment(1), fragment(2), fragment(3)));
+    assert.equal(packets.filter((p) => p.isLast).length, 1);
+    assert.equal(packets.at(-1)?.isLast, true);
+  });
+
+  it("delivers every fragment exactly once and in order", async () => {
+    const packets = await collect(stream(init(), fragment(1), fragment(2), fragment(3)));
+    const fragments = packets.filter((p) => p.isFragment).map((p) => p.data.toString());
+    assert.deepEqual(fragments, ["frag1", "frag2", "frag3"]);
+  });
+
+  it("the initialization segment comes first and is never the last packet", async () => {
+    const packets = await collect(stream(init(), fragment(1)));
+    assert.equal(packets[0]?.isFragment, false);
+    assert.equal(packets[0]?.isLast, false);
+  });
+
+  it("stops early when told to, without emitting the fragment it was holding", async () => {
+    let seen = 0;
+    const packets = await collect(stream(init(), fragment(1), fragment(2), fragment(3)), () => {
+      seen += 1;
+      return seen >= 2;
+    });
+    const fragments = packets.filter((p) => p.isFragment).map((p) => p.data.toString());
+    assert.deepEqual(fragments, ["frag1", "frag2"]);
+    assert.equal(packets.at(-1)?.isLast, true);
+  });
+
+  it("a single fragment is still closed off", async () => {
+    const packets = await collect(stream(init(), fragment(1)));
+    assert.equal(packets.length, 2);
+    assert.equal(packets[1]?.isLast, true);
+  });
+
+  it("an init segment with no fragments has nothing to close", async () => {
+    // Marking the init as last would claim a recording that has no media in it.
+    const packets = await collect(stream(init()));
+    assert.deepEqual(packets.map((p) => p.isLast), [false]);
+  });
+
+  it("an empty source yields nothing at all", async () => {
+    assert.deepEqual(await collect(stream()), []);
   });
 });

@@ -34,6 +34,7 @@ import type { Logger } from "../log.js";
 import type { FfmpegCapabilities } from "./ffmpeg.js";
 import { FfmpegProcess, LocalSocketSink, LocalSocketSource } from "./ffmpeg.js";
 import { Mp4ParseError, parseUnits } from "./mp4.js";
+import type { Mp4Unit } from "./mp4.js";
 import type { Prebuffer } from "./prebuffer.js";
 
 export interface RecordingDelegateOptions {
@@ -85,6 +86,57 @@ function samplerateHz(value: AudioRecordingSamplerate): number {
       return 48000;
     default:
       throw new Error(`unsupported HKSV audio samplerate index ${value}`);
+  }
+}
+
+export interface TaggedPacket {
+  data: Buffer;
+  isLast: boolean;
+  /** False for the initialization segment, which is not a fragment of media. */
+  isFragment: boolean;
+}
+
+/**
+ * Turn a stream of MP4 units into packets, guaranteeing a marked last one.
+ *
+ * HAP-NodeJS has no other way to signal end-of-stream to the hub: a generator
+ * that finishes without ever setting `isLast` causes the entire recording to
+ * be discarded. Not a truncated clip in the Home app — no clip at all. And the
+ * ways a source ends by itself are exactly the ordinary ones: ffmpeg exiting,
+ * the camera dropping, MediaMTX restarting. Every clip lost that way is a
+ * moment something happened in the room, which is the only reason the
+ * recording existed.
+ *
+ * So this keeps one fragment in hand. When another arrives, the held one is
+ * released with `isLast` from `shouldFinish`; when the source runs dry, the
+ * held one is released with `isLast` true. The cost is one fragment of delay,
+ * invisible because HKSV assembles the whole clip before showing it.
+ *
+ * The initialization segment is passed straight through: it is not media, and
+ * a recording that consists only of it has nothing to close.
+ */
+export async function* toPackets(
+  units: AsyncIterable<Mp4Unit>,
+  shouldFinish: () => boolean,
+): AsyncGenerator<TaggedPacket> {
+  let held: Buffer | undefined;
+  for await (const unit of units) {
+    if (unit.kind === "initialization") {
+      yield { data: unit.data, isLast: false, isFragment: false };
+      continue;
+    }
+    if (held !== undefined) {
+      const isLast = shouldFinish();
+      yield { data: held, isLast, isFragment: true };
+      held = undefined;
+      if (isLast) {
+        return;
+      }
+    }
+    held = unit.data;
+  }
+  if (held !== undefined) {
+    yield { data: held, isLast: true, isFragment: true };
   }
 }
 
@@ -223,34 +275,23 @@ export class BabymonRecordingDelegate implements CameraRecordingDelegate {
 
       const output = (await sink.socket()) as unknown as Readable;
 
-      for await (const unit of parseUnits(output, signal)) {
-        if (unit.kind === "initialization") {
-          bytesSent += unit.data.length;
-          this.log.debug(`stream ${streamId}: initialization segment, ${unit.data.length} bytes`);
-          yield { data: unit.data, isLast: false };
-          continue;
+      for await (const packet of toPackets(parseUnits(output, signal), () =>
+        this.shouldFinish(session, signal, Date.now() - startedAt),
+      )) {
+        if (packet.isFragment) {
+          fragmentsSent += 1;
         }
-
-        fragmentsSent += 1;
-        bytesSent += unit.data.length;
-        const elapsed = Date.now() - startedAt;
-        const isLast = this.shouldFinish(session, signal, elapsed);
-        yield { data: unit.data, isLast };
-        if (isLast) {
-          this.log.info(
-            `recording stream ${streamId} finished: ${fragmentsSent} fragments, ` +
-              `${(bytesSent / 1024).toFixed(0)} KiB, ${(elapsed / 1000).toFixed(1)}s`,
-          );
-          return;
-        }
+        bytesSent += packet.data.length;
+        yield { data: packet.data, isLast: packet.isLast };
       }
-
-      // The stream ended without us marking a last packet — HAP-NodeJS cannot
-      // signal end-of-stream to the hub, so say so rather than fail silently.
-      this.log.warn(
-        `recording stream ${streamId} ended after ${fragmentsSent} fragments ` +
-          "without a final packet; the recording may be truncated",
+      this.log.info(
+        `recording stream ${streamId}: ${fragmentsSent} fragments, ` +
+          `${(bytesSent / 1024).toFixed(0)} KiB, ` +
+          `${((Date.now() - startedAt) / 1000).toFixed(1)}s`,
       );
+      if (fragmentsSent === 0) {
+        this.log.warn(`recording stream ${streamId} produced no fragments; nothing to store`);
+      }
     } catch (err) {
       if (signal?.aborted || session.closed) {
         this.log.debug(`recording stream ${streamId} aborted`);
@@ -349,8 +390,34 @@ export class BabymonRecordingDelegate implements CameraRecordingDelegate {
           draining = false;
         })();
       };
+      // A source restart replaces the initialization segment, and the one
+      // already written into this encoder describes the old stream: different
+      // track ids, possibly different geometry. Fragments that follow decode
+      // against the wrong description, so the clip becomes a smear or fails to
+      // demux entirely — and it fails *silently*, because ffmpeg will happily
+      // keep muxing whatever it is handed.
+      //
+      // Stopping the pump ends the input, which the generator now closes off
+      // with a proper last packet: the recording keeps everything captured up
+      // to the restart instead of everything being thrown away.
+      const onReset = () => {
+        this.log.warn(
+          `stream ${session.streamId}: the camera restarted mid-recording; ` +
+            "closing the clip at the restart",
+        );
+        session.detach?.();
+        session.detach = undefined;
+        // close() ends the socket rather than destroying it, so ffmpeg sees a
+        // clean EOF and flushes the fragment it is part way through.
+        session.source?.close();
+      };
+
       prebuffer.on("fragment", onFragment);
-      session.detach = () => prebuffer.removeListener("fragment", onFragment);
+      prebuffer.on("reset", onReset);
+      session.detach = () => {
+        prebuffer.removeListener("fragment", onFragment);
+        prebuffer.removeListener("reset", onReset);
+      };
     } catch (err) {
       if (!session.closed) {
         this.log.warn(`replay pump for stream ${session.streamId} failed: ${(err as Error).message}`);
