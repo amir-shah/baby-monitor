@@ -1,0 +1,247 @@
+/* The quality score: a dial, a stacked breakdown, and the four sub-scores. */
+
+.quality {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+@media (min-width: 34rem) {
+  .quality {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: var(--space-6);
+  }
+}
+
+/* ---- Tone ---------------------------------------------------------------
+   The dial's colour follows the band, but the band's *name* is printed in the
+   middle of the dial, so the colour is a reinforcement and never the message. */
+
+.quality--good {
+  --quality-color: var(--success);
+}
+.quality--warn {
+  --quality-color: var(--warning);
+}
+.quality--bad {
+  --quality-color: var(--danger);
+}
+.quality--neutral {
+  --quality-color: var(--text-muted);
+}
+
+/* ---- Dial --------------------------------------------------------------- */
+
+.quality__dial {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+
+.quality__dial svg {
+  display: block;
+}
+
+.quality__dial-track {
+  fill: none;
+  stroke: var(--surface-3);
+}
+
+.quality__dial-value {
+  fill: none;
+  stroke: var(--quality-color, var(--accent));
+  stroke-linecap: round;
+  transition: stroke-dashoffset var(--dur-slow) var(--ease-out);
+}
+
+.quality__dial-centre {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: var(--leading-tight);
+}
+
+.quality__number {
+  font-size: var(--text-3xl);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text);
+}
+
+.quality__band {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-wide);
+  color: var(--quality-color, var(--text-secondary));
+}
+
+/* ---- Breakdown ---------------------------------------------------------- */
+
+.quality__breakdown {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.quality__bar {
+  display: flex;
+  width: 100%;
+  height: 14px;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  background: var(--surface-3);
+}
+
+.quality__slice {
+  display: block;
+  height: 100%;
+  min-width: 0;
+}
+
+/* Four tints of the accent, each with a different hatch, so the slices are
+   distinguishable without relying on the tint alone. */
+.quality__slice--0 {
+  background-color: var(--accent);
+}
+.quality__slice--1 {
+  background-color: var(--accent);
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgb(255 255 255 / 35%) 0 3px,
+    transparent 3px 6px
+  );
+}
+.quality__slice--2 {
+  background-color: var(--accent);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgb(255 255 255 / 45%) 0 2px,
+    transparent 2px 5px
+  );
+}
+.quality__slice--3 {
+  background-color: var(--accent);
+  background-image: repeating-linear-gradient(
+    90deg,
+    rgb(255 255 255 / 40%) 0 2px,
+    transparent 2px 6px
+  );
+}
+.quality__slice--4 {
+  background-color: var(--accent);
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgb(255 255 255 / 30%) 0 2px,
+    transparent 2px 5px
+  );
+}
+
+.quality__slice--rest {
+  background: transparent;
+}
+
+.quality__swatch {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-xs);
+}
+
+/* ---- Component rows ----------------------------------------------------- */
+
+.quality__components {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.quality__component {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.quality__component-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-secondary);
+  min-width: 0;
+}
+
+.quality__component-score {
+  font-weight: var(--weight-semibold);
+  color: var(--text);
+}
+
+.quality__component-reason {
+  grid-column: 2 / -1;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.quality__component.is-dropped .quality__swatch {
+  background: var(--surface-3);
+  border: var(--border-width) dashed var(--border-strong);
+}
+
+.quality__component.is-dropped .quality__component-score {
+  font-weight: var(--weight-normal);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.quality__scale {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* ---- No score ----------------------------------------------------------- */
+
+.quality--unavailable {
+  align-items: flex-start;
+  gap: var(--space-2);
+  text-align: left;
+}
+
+@media (min-width: 34rem) {
+  /* The two-column layout is for dial-plus-breakdown; the explanation reads
+     as a paragraph and should not be forced into a row. */
+  .quality--unavailable {
+    flex-direction: column;
+  }
+}
+
+.quality__unavailable-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--text);
+}
+
+.quality__unavailable-reason {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--text-secondary);
+  max-width: 52ch;
+}
+
+.quality__coverage {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}

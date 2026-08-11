@@ -1,0 +1,135 @@
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--scrim);
+  animation: modal-fade var(--dur-base) var(--ease-out);
+}
+
+.modal__panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: min(90dvh, 46rem);
+  background: var(--surface);
+  border: var(--border-width) solid var(--border);
+  border-bottom: 0;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  box-shadow: var(--shadow-3);
+  /* Home-indicator clearance on iOS. */
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  animation: modal-rise var(--dur-base) var(--ease-out);
+}
+
+.modal__header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-5) var(--space-3);
+}
+
+.modal__heading {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.modal__title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+
+.modal__description {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.modal__body {
+  padding: 0 var(--space-5) var(--space-5);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  flex: 1 1 auto;
+}
+
+.modal__footer {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  border-top: var(--border-width) solid var(--border-subtle);
+  background: var(--surface-2);
+}
+
+.modal__footer > * {
+  width: 100%;
+}
+
+/* -- Desktop: a centred dialog rather than a sheet ------------------------ */
+
+@media (min-width: 40rem) {
+  .modal {
+    align-items: center;
+    padding: var(--space-6);
+  }
+
+  .modal__panel {
+    border-bottom: var(--border-width) solid var(--border);
+    border-radius: var(--radius-xl);
+    animation-name: modal-pop;
+  }
+
+  .modal__panel--sm {
+    max-width: 24rem;
+  }
+  .modal__panel--md {
+    max-width: 32rem;
+  }
+  .modal__panel--lg {
+    max-width: 48rem;
+  }
+
+  .modal__footer {
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+
+  .modal__footer > * {
+    width: auto;
+  }
+}
+
+@keyframes modal-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes modal-rise {
+  from {
+    transform: translateY(1.5rem);
+    opacity: 0;
+  }
+}
+
+@keyframes modal-pop {
+  from {
+    transform: scale(0.98);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal__panel,
+  .modal__backdrop {
+    animation: none;
+  }
+}

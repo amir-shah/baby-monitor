@@ -1,0 +1,111 @@
+.comfort {
+  --comfort-tone: var(--text-muted);
+  min-inline-size: 0;
+}
+
+.comfort--ok {
+  --comfort-tone: var(--success);
+}
+
+.comfort--low {
+  --comfort-tone: var(--chart-humidity);
+}
+
+.comfort--high {
+  --comfort-tone: var(--warning);
+}
+
+.comfort__label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.comfort__icon {
+  display: inline-flex;
+  color: var(--text-subtle);
+}
+
+.comfort__value {
+  margin-top: var(--space-1);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+}
+
+.comfort__status {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--comfort-tone);
+}
+
+.comfort__glyph {
+  font-size: 0.95em;
+  line-height: 1;
+}
+
+/* -- Track ---------------------------------------------------------------- */
+
+.comfort__track {
+  position: relative;
+  margin-top: var(--space-3);
+  block-size: 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--surface-inset);
+  border: var(--border-width) solid var(--border-subtle);
+}
+
+/* Outlined as well as filled: the band's edges are the information, and a
+   soft tint alone disappears on a dim screen. */
+.comfort__band {
+  position: absolute;
+  inset-block: -1px;
+  border-radius: var(--radius-full);
+  background: var(--success-soft);
+  border: var(--border-width) solid var(--success);
+  opacity: 0.9;
+}
+
+.comfort__marker {
+  position: absolute;
+  inset-block: -0.3rem;
+  inline-size: 0.5rem;
+  translate: -50% 0;
+  border-radius: var(--radius-full);
+  background: var(--text);
+  box-shadow: 0 0 0 2px var(--surface);
+  transition: inset-inline-start var(--dur-base) var(--ease-out);
+}
+
+.comfort__range {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--space-1);
+  font-size: var(--text-2xs);
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+/* -- Grid ----------------------------------------------------------------- */
+
+.comfort-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--space-5) var(--space-6);
+}
+
+@media (forced-colors: active) {
+  .comfort__band {
+    border-color: CanvasText;
+  }
+
+  .comfort__marker {
+    background: Highlight;
+  }
+}

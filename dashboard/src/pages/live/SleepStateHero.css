@@ -1,0 +1,109 @@
+.hero {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-inline-size: 0;
+}
+
+.hero__ring {
+  flex: 0 0 auto;
+  inline-size: 4rem;
+  block-size: 4rem;
+  fill: none;
+}
+
+@media (min-width: 26rem) {
+  .hero__ring {
+    inline-size: 4.5rem;
+    block-size: 4.5rem;
+  }
+}
+
+.hero__ring-track {
+  stroke: var(--surface-3);
+  fill: none;
+}
+
+.hero__ring-arc {
+  stroke: var(--state-color, var(--text-muted));
+  fill: none;
+}
+
+.hero__ring-core {
+  fill: var(--state-color, var(--text-muted));
+  stroke: none;
+}
+
+.hero__ring-core--hollow {
+  fill: none;
+  stroke: var(--state-color, var(--text-muted));
+}
+
+.hero__text {
+  min-inline-size: 0;
+  flex: 1 1 auto;
+}
+
+.hero__state {
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  /* The state colour on the word itself, but the word is the message. */
+  color: var(--state-on-soft, var(--text));
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 26rem) {
+  .hero__state {
+    font-size: var(--text-3xl);
+  }
+}
+
+.hero__duration {
+  margin-top: var(--space-1);
+  font-size: var(--text-md);
+  color: var(--text-secondary);
+  line-height: var(--leading-snug);
+}
+
+.hero__duration strong {
+  font-weight: var(--weight-semibold);
+  color: var(--text);
+}
+
+.hero__since {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.hero__unknown {
+  color: var(--text-muted);
+}
+
+.hero__total,
+.hero__meta {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.hero__meta--stale {
+  color: var(--warning);
+}
+
+/* The badge repeats the state name in the corner. Redundant on purpose: it is
+   the only place the marker shape and the word sit together at small size,
+   which is the pairing someone learns the vocabulary from. */
+.hero__badge {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+}
+
+@media (max-width: 25.99rem) {
+  .hero__badge {
+    display: none;
+  }
+}

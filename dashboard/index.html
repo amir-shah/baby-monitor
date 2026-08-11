@@ -1,0 +1,49 @@
+<!doctype html>
+<!--
+  data-theme is hardcoded to "dark" so the very first paint is dark even before
+  any JavaScript runs. The bootstrap script below immediately corrects it from
+  localStorage; a stored preference of "system" removes the attribute and lets
+  prefers-color-scheme decide.
+-->
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>babymon</title>
+    <meta name="description" content="Baby sleep monitor dashboard" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#06070a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script>
+      // Applied before first paint to avoid a light flash in a dark bedroom.
+      // Keep in sync with src/hooks/useTheme.tsx (THEME_STORAGE_KEY).
+      (function () {
+        try {
+          var stored = localStorage.getItem('babymon.theme');
+          var root = document.documentElement;
+          if (stored === 'light' || stored === 'dark') {
+            root.setAttribute('data-theme', stored);
+          } else if (stored === 'system') {
+            root.removeAttribute('data-theme');
+          }
+          // No stored preference: leave the hardcoded dark default in place.
+        } catch (_) {
+          /* private mode / disabled storage: keep the dark default */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>
+      <p style="padding: 2rem; font: 1rem/1.6 system-ui, sans-serif">
+        The babymon dashboard needs JavaScript. The API itself is still reachable at
+        <code>/api/health</code>.
+      </p>
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

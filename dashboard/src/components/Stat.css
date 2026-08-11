@@ -1,0 +1,96 @@
+.stat {
+  --stat-tone: var(--text);
+  min-width: 0;
+}
+
+.stat--good {
+  --stat-tone: var(--success);
+}
+.stat--warn {
+  --stat-tone: var(--warning);
+}
+.stat--bad {
+  --stat-tone: var(--danger);
+}
+
+.stat__label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  line-height: var(--leading-snug);
+}
+
+.stat__icon {
+  display: inline-flex;
+  color: var(--text-subtle);
+}
+
+.stat__value {
+  margin-top: var(--space-1);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--stat-tone);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.stat__unit {
+  margin-left: 0.15em;
+  font-size: 0.6em;
+  font-weight: var(--weight-medium);
+  color: var(--text-muted);
+  letter-spacing: var(--tracking-normal);
+}
+
+.stat__hint {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+}
+
+.stat__trend {
+  font-size: var(--text-sm);
+  line-height: 1;
+}
+
+.stat--good .stat__trend,
+.stat--bad .stat__trend,
+.stat--warn .stat__trend {
+  color: var(--stat-tone);
+}
+
+/* -- Sizes ---------------------------------------------------------------- */
+
+.stat--sm .stat__value {
+  font-size: var(--text-lg);
+}
+
+.stat--lg .stat__value {
+  font-size: var(--text-2xl);
+}
+
+/* The single big number on the live page. Legible from across a dark room. */
+.stat--hero .stat__value {
+  font-size: var(--text-3xl);
+}
+
+@media (min-width: 30rem) {
+  .stat--hero .stat__value {
+    font-size: var(--text-4xl);
+  }
+}
+
+/* -- Grid ----------------------------------------------------------------- */
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--stat-min, 8rem), 1fr));
+  gap: var(--space-5) var(--space-4);
+}

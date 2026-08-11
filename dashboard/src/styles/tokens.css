@@ -1,0 +1,609 @@
+/* ==========================================================================
+   babymon design tokens
+   ==========================================================================
+
+   Theme resolution, in priority order:
+
+     1. :root[data-theme="dark"]  / :root[data-theme="light"]   manual choice
+     2. @media (prefers-color-scheme: dark) :root:not([data-theme="light"])
+     3. :root                                                    light default
+
+   Light values live on bare :root so every token has a definition that is not
+   trapped inside a media query. The dark values are then written twice — once
+   under the media query (guarded so an explicit light choice still wins) and
+   once under the explicit dark attribute (so the toggle wins over an OS that
+   says light). index.html hardcodes data-theme="dark", because the primary use
+   of this dashboard is at 3am in a dark bedroom; a stored preference of
+   "system" removes the attribute and hands control back to the OS.
+
+   Colour never carries meaning on its own. Every sleep state also has a
+   stroke-dash pattern token and every component that uses one also renders the
+   state's name.
+   ========================================================================== */
+
+:root {
+  /* ---- Typography ------------------------------------------------------ */
+  /* System stack only. The Pi may be on a LAN with no route to the internet,
+     so a webfont would mean a 3-second FOIT or a 200kB payload in the bundle. */
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+  --font-mono:
+    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  /* Tabular figures keep a ticking clock from shuffling sideways. */
+  --font-numeric: var(--font-sans);
+
+  --text-2xs: 0.6875rem; /* 11px  — axis ticks, only where unavoidable */
+  --text-xs: 0.75rem; /*    12px */
+  --text-sm: 0.8125rem; /*  13px */
+  --text-base: 0.9375rem; /* 15px — body; larger than the usual 14 on purpose */
+  --text-md: 1.0625rem; /*  17px */
+  --text-lg: 1.25rem; /*    20px */
+  --text-xl: 1.5rem; /*     24px */
+  --text-2xl: 2rem; /*      32px */
+  --text-3xl: 2.75rem; /*   44px — the one big number on the live page */
+  --text-4xl: 3.75rem; /*   60px */
+
+  --leading-tight: 1.15;
+  --leading-snug: 1.35;
+  --leading-normal: 1.55;
+  --leading-relaxed: 1.7;
+
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.02em;
+  --tracking-caps: 0.07em;
+
+  /* ---- Spacing (4px base) ---------------------------------------------- */
+  --space-0: 0;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-7: 2rem;
+  --space-8: 2.5rem;
+  --space-9: 3rem;
+  --space-10: 4rem;
+
+  /* ---- Radii ------------------------------------------------------------ */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 999px;
+
+  /* ---- Layout ----------------------------------------------------------- */
+  --header-h: 3.5rem;
+  --nav-h: 3.75rem; /* mobile bottom bar, excluding safe-area inset */
+  --sidebar-w: 14rem; /* desktop rail */
+  --content-max: 64rem;
+  --tap-target: 2.75rem; /* 44px, the smallest thing a thumb finds at 3am */
+  --border-width: 1px;
+
+  /* ---- Motion ----------------------------------------------------------- */
+  --dur-instant: 80ms;
+  --dur-fast: 140ms;
+  --dur-base: 220ms;
+  --dur-slow: 400ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* ---- Z layers --------------------------------------------------------- */
+  --z-base: 0;
+  --z-sticky: 10;
+  --z-nav: 20;
+  --z-overlay: 100;
+  --z-modal: 110;
+  --z-toast: 120;
+
+  /* =========================================================================
+     LIGHT PALETTE (the :root default)
+     ======================================================================= */
+
+  /* Surfaces, back to front. */
+  --bg: #f4f5f7;
+  --bg-gradient: none;
+  --surface: #ffffff;
+  --surface-2: #f8f9fb;
+  --surface-3: #eef0f4;
+  --surface-inset: #eaecf1;
+  --surface-hover: #f0f2f6;
+  --surface-active: #e6e9ef;
+  --scrim: rgb(24 26 32 / 45%);
+
+  /* Text. */
+  --text: #15171d;
+  --text-secondary: #414653;
+  --text-muted: #5c6272; /* 5.9:1 on --bg */
+  --text-subtle: #767d8e; /* decorative only; never the sole carrier */
+  --text-inverse: #ffffff;
+  --text-link: #2f4bc4;
+
+  /* Lines. */
+  --border: #dfe2e9;
+  --border-strong: #c4c9d4;
+  --border-subtle: #e9ebf0;
+
+  /* Brand / accent: a calm periwinkle, not a notification blue. */
+  --accent: #3d51c4;
+  --accent-hover: #33459f;
+  --accent-active: #2b3a8a;
+  --accent-fg: #ffffff;
+  --accent-soft: #e6e9fb;
+  --accent-soft-fg: #2b3a8a;
+  --accent-ring: #7f8ee0;
+
+  /* Feedback. */
+  --success: #1f7a4d;
+  --success-soft: #e0f3e9;
+  --success-soft-fg: #14603a;
+  --warning: #8a5a00;
+  --warning-soft: #fbeed3;
+  --warning-soft-fg: #6d4700;
+  --danger: #b3261e;
+  --danger-soft: #fbe4e2;
+  --danger-soft-fg: #8c1d18;
+  --danger-fg: #ffffff;
+
+  /* Focus. Always visible, always two-tone so it survives any background. */
+  --focus-ring: #2f4bc4;
+  --focus-ring-contrast: #ffffff;
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+
+  /* ---- Sleep-state palette --------------------------------------------
+     Hues are separated enough to survive deuteranopia, but the dash pattern
+     is the real differentiator: charts must stay readable in greyscale. */
+  --state-asleep: #3f4fbf;
+  --state-asleep-soft: #e4e7fa;
+  --state-asleep-fg: #2a367f;
+  --state-asleep-dash: none;
+
+  --state-restless: #8a5a00;
+  --state-restless-soft: #fbeed3;
+  --state-restless-fg: #6d4700;
+  --state-restless-dash: 6 3;
+
+  --state-settling: #0f6b5c;
+  --state-settling-soft: #d9f0eb;
+  --state-settling-fg: #0b5147;
+  --state-settling-dash: 2 3;
+
+  --state-awake: #b04a1f;
+  --state-awake-soft: #fbe7dc;
+  --state-awake-fg: #8a3a18;
+  --state-awake-dash: 10 4;
+
+  --state-absent: #5c6272;
+  --state-absent-soft: #e8eaef;
+  --state-absent-fg: #454b59;
+  --state-absent-dash: 1 4;
+
+  --state-unknown: #767d8e;
+  --state-unknown-soft: #eceef2;
+  --state-unknown-fg: #545a68;
+  --state-unknown-dash: 3 3 1 3;
+
+  /* ---- Event severity --------------------------------------------------- */
+  --severity-info: #5c6272;
+  --severity-info-soft: #e8eaef;
+  --severity-info-fg: #454b59;
+
+  --severity-notice: #8a5a00;
+  --severity-notice-soft: #fbeed3;
+  --severity-notice-fg: #6d4700;
+
+  --severity-alert: #b3261e;
+  --severity-alert-soft: #fbe4e2;
+  --severity-alert-fg: #8c1d18;
+
+  /* ---- Chart furniture -------------------------------------------------- */
+  --chart-grid: #e4e7ed;
+  --chart-axis: #c4c9d4;
+  --chart-label: #5c6272;
+  --chart-sound: #3d51c4;
+  --chart-motion: #0f6b5c;
+  --chart-temp: #b04a1f;
+  --chart-humidity: #1f6f8a;
+  --chart-target-band: rgb(61 81 196 / 10%);
+  --chart-crosshair: #767d8e;
+
+  /* ---- Elevation -------------------------------------------------------- */
+  --shadow-1: 0 1px 2px rgb(16 18 24 / 6%), 0 1px 1px rgb(16 18 24 / 4%);
+  --shadow-2: 0 2px 6px rgb(16 18 24 / 8%), 0 6px 16px rgb(16 18 24 / 6%);
+  --shadow-3: 0 8px 24px rgb(16 18 24 / 12%), 0 16px 48px rgb(16 18 24 / 10%);
+  --shadow-inset: inset 0 1px 0 rgb(255 255 255 / 60%);
+}
+
+/* ==========================================================================
+   DARK PALETTE
+   Written twice on purpose — see the header comment.
+   ========================================================================== */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    /* Near-black, not slate grey: this is looked at in an unlit bedroom and
+       any lift in the background lights up the whole room. A hint of blue
+       keeps it from looking like a dead pixel field. */
+    --bg: #06070a;
+    --bg-gradient: none;
+    --surface: #0d0f15;
+    --surface-2: #12141c;
+    --surface-3: #181b24;
+    --surface-inset: #090a0f;
+    --surface-hover: #171a23;
+    --surface-active: #1e222c;
+    --scrim: rgb(0 0 0 / 70%);
+
+    --text: #e6e8ef; /* 15.5:1 on --bg. Not pure white: less glare. */
+    --text-secondary: #b6bcca;
+    --text-muted: #929aab; /* 7.4:1 on --bg */
+    --text-subtle: #6d7486; /* 4.6:1 — decorative only */
+    --text-inverse: #06070a;
+    --text-link: #9aabff;
+
+    --border: #232733;
+    --border-strong: #343a49;
+    --border-subtle: #191d26;
+
+    --accent: #8ea2ff;
+    --accent-hover: #a4b4ff;
+    --accent-active: #b8c4ff;
+    --accent-fg: #0a0d1a;
+    --accent-soft: #171c33;
+    --accent-soft-fg: #b3c0ff;
+    --accent-ring: #6b7fd6;
+
+    --success: #5fd39b;
+    --success-soft: #0f2419;
+    --success-soft-fg: #7fdcae;
+    --warning: #e0b25c;
+    --warning-soft: #241c0c;
+    --warning-soft-fg: #eac583;
+    --danger: #f08a80;
+    --danger-soft: #2a1210;
+    --danger-soft-fg: #f4a79f;
+    --danger-fg: #1a0806;
+
+    --focus-ring: #9aabff;
+    --focus-ring-contrast: #06070a;
+
+    --state-asleep: #8e9dff;
+    --state-asleep-soft: #161b30;
+    --state-asleep-fg: #b0bcff;
+    --state-asleep-dash: none;
+
+    --state-restless: #e0b25c;
+    --state-restless-soft: #241c0c;
+    --state-restless-fg: #eac583;
+    --state-restless-dash: 6 3;
+
+    --state-settling: #5cc7ad;
+    --state-settling-soft: #0c221d;
+    --state-settling-fg: #85d8c4;
+    --state-settling-dash: 2 3;
+
+    --state-awake: #ef9270;
+    --state-awake-soft: #26150e;
+    --state-awake-fg: #f4ab90;
+    --state-awake-dash: 10 4;
+
+    --state-absent: #7b8394;
+    --state-absent-soft: #14171e;
+    --state-absent-fg: #98a0b0;
+    --state-absent-dash: 1 4;
+
+    --state-unknown: #6d7486;
+    --state-unknown-soft: #121419;
+    --state-unknown-fg: #929aab;
+    --state-unknown-dash: 3 3 1 3;
+
+    --severity-info: #7b8394;
+    --severity-info-soft: #14171e;
+    --severity-info-fg: #98a0b0;
+
+    --severity-notice: #e0b25c;
+    --severity-notice-soft: #241c0c;
+    --severity-notice-fg: #eac583;
+
+    --severity-alert: #f08a80;
+    --severity-alert-soft: #2a1210;
+    --severity-alert-fg: #f4a79f;
+
+    --chart-grid: #1b1f29;
+    --chart-axis: #2c313d;
+    --chart-label: #929aab;
+    --chart-sound: #8ea2ff;
+    --chart-motion: #5cc7ad;
+    --chart-temp: #ef9270;
+    --chart-humidity: #6fb6d6;
+    --chart-target-band: rgb(142 162 255 / 12%);
+    --chart-crosshair: #6d7486;
+
+    /* Shadows barely register on near-black; a hairline ring does the work. */
+    --shadow-1: 0 1px 2px rgb(0 0 0 / 60%);
+    --shadow-2: 0 2px 8px rgb(0 0 0 / 65%), 0 8px 24px rgb(0 0 0 / 45%);
+    --shadow-3: 0 12px 40px rgb(0 0 0 / 70%), 0 2px 8px rgb(0 0 0 / 60%);
+    --shadow-inset: inset 0 1px 0 rgb(255 255 255 / 4%);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #06070a;
+  --bg-gradient: none;
+  --surface: #0d0f15;
+  --surface-2: #12141c;
+  --surface-3: #181b24;
+  --surface-inset: #090a0f;
+  --surface-hover: #171a23;
+  --surface-active: #1e222c;
+  --scrim: rgb(0 0 0 / 70%);
+
+  --text: #e6e8ef;
+  --text-secondary: #b6bcca;
+  --text-muted: #929aab;
+  --text-subtle: #6d7486;
+  --text-inverse: #06070a;
+  --text-link: #9aabff;
+
+  --border: #232733;
+  --border-strong: #343a49;
+  --border-subtle: #191d26;
+
+  --accent: #8ea2ff;
+  --accent-hover: #a4b4ff;
+  --accent-active: #b8c4ff;
+  --accent-fg: #0a0d1a;
+  --accent-soft: #171c33;
+  --accent-soft-fg: #b3c0ff;
+  --accent-ring: #6b7fd6;
+
+  --success: #5fd39b;
+  --success-soft: #0f2419;
+  --success-soft-fg: #7fdcae;
+  --warning: #e0b25c;
+  --warning-soft: #241c0c;
+  --warning-soft-fg: #eac583;
+  --danger: #f08a80;
+  --danger-soft: #2a1210;
+  --danger-soft-fg: #f4a79f;
+  --danger-fg: #1a0806;
+
+  --focus-ring: #9aabff;
+  --focus-ring-contrast: #06070a;
+
+  --state-asleep: #8e9dff;
+  --state-asleep-soft: #161b30;
+  --state-asleep-fg: #b0bcff;
+  --state-asleep-dash: none;
+
+  --state-restless: #e0b25c;
+  --state-restless-soft: #241c0c;
+  --state-restless-fg: #eac583;
+  --state-restless-dash: 6 3;
+
+  --state-settling: #5cc7ad;
+  --state-settling-soft: #0c221d;
+  --state-settling-fg: #85d8c4;
+  --state-settling-dash: 2 3;
+
+  --state-awake: #ef9270;
+  --state-awake-soft: #26150e;
+  --state-awake-fg: #f4ab90;
+  --state-awake-dash: 10 4;
+
+  --state-absent: #7b8394;
+  --state-absent-soft: #14171e;
+  --state-absent-fg: #98a0b0;
+  --state-absent-dash: 1 4;
+
+  --state-unknown: #6d7486;
+  --state-unknown-soft: #121419;
+  --state-unknown-fg: #929aab;
+  --state-unknown-dash: 3 3 1 3;
+
+  --severity-info: #7b8394;
+  --severity-info-soft: #14171e;
+  --severity-info-fg: #98a0b0;
+
+  --severity-notice: #e0b25c;
+  --severity-notice-soft: #241c0c;
+  --severity-notice-fg: #eac583;
+
+  --severity-alert: #f08a80;
+  --severity-alert-soft: #2a1210;
+  --severity-alert-fg: #f4a79f;
+
+  --chart-grid: #1b1f29;
+  --chart-axis: #2c313d;
+  --chart-label: #929aab;
+  --chart-sound: #8ea2ff;
+  --chart-motion: #5cc7ad;
+  --chart-temp: #ef9270;
+  --chart-humidity: #6fb6d6;
+  --chart-target-band: rgb(142 162 255 / 12%);
+  --chart-crosshair: #6d7486;
+
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 60%);
+  --shadow-2: 0 2px 8px rgb(0 0 0 / 65%), 0 8px 24px rgb(0 0 0 / 45%);
+  --shadow-3: 0 12px 40px rgb(0 0 0 / 70%), 0 2px 8px rgb(0 0 0 / 60%);
+  --shadow-inset: inset 0 1px 0 rgb(255 255 255 / 4%);
+}
+
+/* An explicit light choice must also win over an OS that says dark. Repeating
+   the light values here rather than relying on cascade order means the block
+   works no matter where it lands in the built stylesheet. */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --surface-2: #f8f9fb;
+  --surface-3: #eef0f4;
+  --surface-inset: #eaecf1;
+  --surface-hover: #f0f2f6;
+  --surface-active: #e6e9ef;
+  --scrim: rgb(24 26 32 / 45%);
+
+  --text: #15171d;
+  --text-secondary: #414653;
+  --text-muted: #5c6272;
+  --text-subtle: #767d8e;
+  --text-inverse: #ffffff;
+  --text-link: #2f4bc4;
+
+  --border: #dfe2e9;
+  --border-strong: #c4c9d4;
+  --border-subtle: #e9ebf0;
+
+  --accent: #3d51c4;
+  --accent-hover: #33459f;
+  --accent-active: #2b3a8a;
+  --accent-fg: #ffffff;
+  --accent-soft: #e6e9fb;
+  --accent-soft-fg: #2b3a8a;
+  --accent-ring: #7f8ee0;
+
+  --success: #1f7a4d;
+  --success-soft: #e0f3e9;
+  --success-soft-fg: #14603a;
+  --warning: #8a5a00;
+  --warning-soft: #fbeed3;
+  --warning-soft-fg: #6d4700;
+  --danger: #b3261e;
+  --danger-soft: #fbe4e2;
+  --danger-soft-fg: #8c1d18;
+  --danger-fg: #ffffff;
+
+  --focus-ring: #2f4bc4;
+  --focus-ring-contrast: #ffffff;
+
+  --state-asleep: #3f4fbf;
+  --state-asleep-soft: #e4e7fa;
+  --state-asleep-fg: #2a367f;
+  --state-restless: #8a5a00;
+  --state-restless-soft: #fbeed3;
+  --state-restless-fg: #6d4700;
+  --state-settling: #0f6b5c;
+  --state-settling-soft: #d9f0eb;
+  --state-settling-fg: #0b5147;
+  --state-awake: #b04a1f;
+  --state-awake-soft: #fbe7dc;
+  --state-awake-fg: #8a3a18;
+  --state-absent: #5c6272;
+  --state-absent-soft: #e8eaef;
+  --state-absent-fg: #454b59;
+  --state-unknown: #767d8e;
+  --state-unknown-soft: #eceef2;
+  --state-unknown-fg: #545a68;
+
+  --severity-info: #5c6272;
+  --severity-info-soft: #e8eaef;
+  --severity-info-fg: #454b59;
+  --severity-notice: #8a5a00;
+  --severity-notice-soft: #fbeed3;
+  --severity-notice-fg: #6d4700;
+  --severity-alert: #b3261e;
+  --severity-alert-soft: #fbe4e2;
+  --severity-alert-fg: #8c1d18;
+
+  --chart-grid: #e4e7ed;
+  --chart-axis: #c4c9d4;
+  --chart-label: #5c6272;
+  --chart-sound: #3d51c4;
+  --chart-motion: #0f6b5c;
+  --chart-temp: #b04a1f;
+  --chart-humidity: #1f6f8a;
+  --chart-target-band: rgb(61 81 196 / 10%);
+  --chart-crosshair: #767d8e;
+
+  --shadow-1: 0 1px 2px rgb(16 18 24 / 6%), 0 1px 1px rgb(16 18 24 / 4%);
+  --shadow-2: 0 2px 6px rgb(16 18 24 / 8%), 0 6px 16px rgb(16 18 24 / 6%);
+  --shadow-3: 0 8px 24px rgb(16 18 24 / 12%), 0 16px 48px rgb(16 18 24 / 10%);
+  --shadow-inset: inset 0 1px 0 rgb(255 255 255 / 60%);
+}
+
+/* ==========================================================================
+   Semantic aliases, so components reference a role rather than a state name.
+   `.state-asleep` etc. are set by helpers in src/lib/stateStyles.ts.
+   ========================================================================== */
+
+.state-asleep {
+  --state-color: var(--state-asleep);
+  --state-soft: var(--state-asleep-soft);
+  --state-on-soft: var(--state-asleep-fg);
+  --state-dash: var(--state-asleep-dash);
+}
+.state-restless {
+  --state-color: var(--state-restless);
+  --state-soft: var(--state-restless-soft);
+  --state-on-soft: var(--state-restless-fg);
+  --state-dash: var(--state-restless-dash);
+}
+.state-settling {
+  --state-color: var(--state-settling);
+  --state-soft: var(--state-settling-soft);
+  --state-on-soft: var(--state-settling-fg);
+  --state-dash: var(--state-settling-dash);
+}
+.state-awake {
+  --state-color: var(--state-awake);
+  --state-soft: var(--state-awake-soft);
+  --state-on-soft: var(--state-awake-fg);
+  --state-dash: var(--state-awake-dash);
+}
+.state-absent {
+  --state-color: var(--state-absent);
+  --state-soft: var(--state-absent-soft);
+  --state-on-soft: var(--state-absent-fg);
+  --state-dash: var(--state-absent-dash);
+}
+.state-unknown {
+  --state-color: var(--state-unknown);
+  --state-soft: var(--state-unknown-soft);
+  --state-on-soft: var(--state-unknown-fg);
+  --state-dash: var(--state-unknown-dash);
+}
+
+.severity-info {
+  --severity-color: var(--severity-info);
+  --severity-soft: var(--severity-info-soft);
+  --severity-on-soft: var(--severity-info-fg);
+}
+.severity-notice {
+  --severity-color: var(--severity-notice);
+  --severity-soft: var(--severity-notice-soft);
+  --severity-on-soft: var(--severity-notice-fg);
+}
+.severity-alert {
+  --severity-color: var(--severity-alert);
+  --severity-soft: var(--severity-alert-soft);
+  --severity-on-soft: var(--severity-alert-fg);
+}
+
+/* ==========================================================================
+   Reduced motion: collapse the duration tokens at the source so every
+   transition and animation built on them stops, without each component
+   needing its own media query.
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-instant: 0ms;
+    --dur-fast: 0ms;
+    --dur-base: 0ms;
+    --dur-slow: 0ms;
+  }
+}

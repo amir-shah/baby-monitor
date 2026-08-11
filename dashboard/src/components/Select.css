@@ -1,0 +1,111 @@
+/* Shared form-field furniture, used by Select and by any input a page adds. */
+
+.field {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.field--block {
+  display: flex;
+  width: 100%;
+}
+
+.field__label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+}
+
+.field__hint {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.field__error {
+  font-size: var(--text-sm);
+  color: var(--danger);
+}
+
+/* -- Select --------------------------------------------------------------- */
+
+.select {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.select__control {
+  appearance: none;
+  width: 100%;
+  min-height: var(--tap-target);
+  padding: 0 2.25rem 0 var(--space-3);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: var(--text-base);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.select__control:hover:not(:disabled) {
+  border-color: var(--accent-ring);
+}
+
+.select__control:disabled {
+  opacity: 0.5;
+}
+
+/* The native dropdown list is painted by the OS, so tell it which scheme to
+   use — otherwise a dark page gets a white option list. */
+.select__control option {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.select__chevron {
+  position: absolute;
+  inset-inline-end: var(--space-3);
+  pointer-events: none;
+  color: var(--text-muted);
+}
+
+.select--sm .select__control {
+  min-height: 2.25rem;
+  font-size: var(--text-sm);
+  padding-inline: var(--space-3) 2rem;
+}
+
+.select.is-invalid .select__control {
+  border-color: var(--danger);
+}
+
+/* -- Text inputs, same shell --------------------------------------------- */
+
+.input {
+  width: 100%;
+  min-height: var(--tap-target);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: var(--text-base);
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.input:hover:not(:disabled) {
+  border-color: var(--accent-ring);
+}
+
+.input:disabled {
+  opacity: 0.5;
+}
+
+textarea.input {
+  min-height: 5rem;
+  line-height: var(--leading-normal);
+}

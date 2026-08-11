@@ -1,0 +1,32 @@
+# Log rotation for babymon.
+#
+# By default babymon logs to stdout and journald catches it, in which case this
+# file rotates nothing and costs nothing — journald has its own limits
+# (see /etc/systemd/journald.conf, SystemMaxUse=). It exists for the case where
+# you set `logging.file` in the config, which is worth doing if you want logs
+# that survive a journald vacuum.
+#
+# Install: sudo cp deploy/logrotate/babymon /etc/logrotate.d/babymon
+#
+# Note the interaction with ProtectSystem=strict in the units: @LOG_DIR@ is in
+# ReadWritePaths, so the service can write there, but logrotate runs outside the
+# sandbox as root and can always rotate.
+
+@LOG_DIR@/*.log {
+    daily
+    rotate 14
+    # A nursery Pi generates a few MB a day at INFO. compress keeps two weeks
+    # under 10 MB, which matters if this ended up on the SD card after all.
+    compress
+    delaycompress
+    missingok
+    notifempty
+    # copytruncate rather than a postrotate restart. Restarting the service to
+    # release a file handle would drop the microphone stream and reset the
+    # adaptive noise floor, which then takes noise_floor.window_s (five
+    # minutes) to settle again — at 03:00, in the middle of the night it is
+    # supposed to be measuring.
+    copytruncate
+    create 0640 @USER@ @GROUP@
+    su @USER@ @GROUP@
+}

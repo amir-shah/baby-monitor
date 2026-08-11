@@ -1,0 +1,51 @@
+.spinner {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: currentcolor;
+}
+
+.spinner svg {
+  animation: spinner-rotate 900ms linear infinite;
+}
+
+.spinner__track,
+.spinner__head {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.spinner__track {
+  stroke: currentcolor;
+  opacity: 0.2;
+}
+
+.spinner__head {
+  stroke: currentcolor;
+  /* r=9 -> circumference ~56.5. A quarter arc reads as motion without
+     looking like a progress value. */
+  stroke-dasharray: 14 43;
+}
+
+@keyframes spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes spinner-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner svg {
+    animation: spinner-pulse 1.4s ease-in-out infinite !important;
+  }
+
+  .spinner__head {
+    stroke-dasharray: none;
+    opacity: 0.7;
+  }
+}

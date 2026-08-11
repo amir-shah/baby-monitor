@@ -1,0 +1,80 @@
+.spark {
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.spark__svg {
+  display: block;
+  inline-size: 100%;
+  overflow: visible;
+}
+
+.spark__level {
+  fill: none;
+  stroke: var(--chart-sound);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Dashed, and quieter: the floor is a reference, not a reading. */
+.spark__floor {
+  fill: none;
+  stroke: var(--chart-label);
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  opacity: 0.75;
+}
+
+.spark__head {
+  fill: var(--chart-sound);
+  stroke: var(--surface);
+  stroke-width: 1.5;
+}
+
+.spark__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: var(--border-width) dashed var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-subtle);
+  font-size: var(--text-sm);
+}
+
+.spark__axis {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+  font-size: var(--text-2xs);
+  color: var(--text-subtle);
+  letter-spacing: var(--tracking-wide);
+}
+
+.spark__legend {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.spark__key {
+  inline-size: 0.75rem;
+  block-size: 0;
+  border-top-width: 2px;
+  border-top-style: solid;
+  display: inline-block;
+  margin-inline-end: 2px;
+}
+
+.spark__key--level {
+  border-top-color: var(--chart-sound);
+}
+
+/* Dashed in the legend too, so the two series are told apart by pattern. */
+.spark__key--floor {
+  border-top-color: var(--chart-label);
+  border-top-style: dashed;
+  margin-inline-start: var(--space-2);
+}

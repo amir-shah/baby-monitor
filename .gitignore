@@ -1,0 +1,58 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ---- Node ----
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tsbuildinfo
+
+# ---- Build output ----
+dashboard/dist/
+homekit/dist/
+pi/babymon/api/static/
+
+# ---- Runtime data (never commit) ----
+/var/
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+clips/
+snapshots/
+recordings/
+persist/
+models/*.tflite
+models/*.csv
+
+# ---- Local config & secrets ----
+config/babymon.yaml
+config/*.local.yaml
+.env
+.env.*
+!.env.example
+
+# ---- Editors / OS ----
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Lockfiles for the two Node projects are committed; their trees are not.

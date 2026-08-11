@@ -1,0 +1,80 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.2em 0.6em;
+  border-radius: var(--radius-full);
+  border: var(--border-width) solid transparent;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  line-height: 1.5;
+  white-space: nowrap;
+  background: var(--surface-3);
+  color: var(--text-secondary);
+}
+
+.badge--sm {
+  font-size: var(--text-xs);
+  gap: var(--space-1);
+  padding: 0.15em 0.5em;
+}
+
+.badge__dot {
+  inline-size: 0.5em;
+  block-size: 0.5em;
+  border-radius: var(--radius-full);
+  background: currentcolor;
+  flex: 0 0 auto;
+}
+
+.badge__marker {
+  flex: 0 0 auto;
+  color: var(--state-color, currentcolor);
+}
+
+.badge__glyph {
+  font-size: 0.85em;
+  line-height: 1;
+  color: var(--severity-color, currentcolor);
+}
+
+/* -- Tones ---------------------------------------------------------------- */
+
+.badge--accent {
+  background: var(--accent-soft);
+  color: var(--accent-soft-fg);
+}
+
+.badge--success {
+  background: var(--success-soft);
+  color: var(--success-soft-fg);
+}
+
+.badge--warning {
+  background: var(--warning-soft);
+  color: var(--warning-soft-fg);
+}
+
+.badge--danger {
+  background: var(--danger-soft);
+  color: var(--danger-soft-fg);
+}
+
+/* -- Semantic variants ---------------------------------------------------- */
+
+.badge--state {
+  background: var(--state-soft);
+  color: var(--state-on-soft);
+  border-color: color-mix(in srgb, var(--state-color) 30%, transparent);
+}
+
+.badge--severity {
+  background: var(--severity-soft);
+  color: var(--severity-on-soft);
+}
+
+@media (forced-colors: active) {
+  .badge {
+    border: 1px solid CanvasText;
+  }
+}

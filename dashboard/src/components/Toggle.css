@@ -1,0 +1,112 @@
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--tap-target);
+}
+
+.toggle--label-start {
+  flex-direction: row-reverse;
+  justify-content: space-between;
+}
+
+.toggle__control {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  /* Padding rather than size: the visible track stays small, the hit area
+     stays 44px tall. */
+  padding: calc((var(--tap-target) - 1.75rem) / 2) 0;
+  border-radius: var(--radius-full);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.toggle__control:disabled {
+  opacity: 0.5;
+}
+
+.toggle__track {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  inline-size: 3rem;
+  block-size: 1.75rem;
+  padding: 0 0.4rem;
+  border-radius: var(--radius-full);
+  border: var(--border-width) solid var(--border-strong);
+  background: var(--surface-3);
+  transition:
+    background-color var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out);
+}
+
+.toggle__control[aria-checked='true'] .toggle__track {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.toggle__knob {
+  position: absolute;
+  inset-inline-start: 0.185rem;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.toggle__control[aria-checked='true'] .toggle__knob {
+  transform: translateX(1.185rem);
+}
+
+.toggle__glyph {
+  font-size: 0.65rem;
+  line-height: 1;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.toggle__glyph--on {
+  color: var(--accent-fg);
+  opacity: 0;
+}
+
+.toggle__glyph--off {
+  margin-inline-start: auto;
+  color: var(--text-subtle);
+  opacity: 1;
+}
+
+.toggle__control[aria-checked='true'] .toggle__glyph--on {
+  opacity: 1;
+}
+
+.toggle__control[aria-checked='true'] .toggle__glyph--off {
+  opacity: 0;
+}
+
+.toggle__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.toggle__label {
+  font-size: var(--text-base);
+  color: var(--text);
+}
+
+.toggle__description {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  line-height: var(--leading-snug);
+}
+
+@media (forced-colors: active) {
+  .toggle__track {
+    border: 1px solid CanvasText;
+  }
+  .toggle__knob {
+    background: CanvasText;
+  }
+}

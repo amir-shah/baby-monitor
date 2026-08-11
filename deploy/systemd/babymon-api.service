@@ -1,0 +1,128 @@
+[Unit]
+Description=babymon API, sensing loops and analytics
+Documentation=file:///opt/babymon/docs/ARCHITECTURE.md
+Documentation=file:///opt/babymon/docs/API.md
+
+# One process, several threads: the HTTP API, the audio analyser, the motion
+# analyser, the environment poll and the sleep state machine. They share the
+# in-process event bus (babymon.bus) and one SQLite connection pool, which is
+# why they are not separate units — splitting them would mean a second writer
+# on the database and an IPC hop on every sample tick.
+#
+# sound.target: ALSA devices are settled by then, so the microphone exists.
+# babymon-mediamtx: the camera hub this reads its low-res analysis stream from.
+# Wants, not Requires — the monitor is still useful with no camera, and audio
+# is the half that actually detects crying.
+After=network-online.target sound.target babymon-mediamtx.service
+Wants=network-online.target sound.target babymon-mediamtx.service
+
+# Ten restarts in five minutes means it is not going to recover on its own.
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=exec
+User=babymon
+Group=babymon
+# audio: /dev/snd.  i2c: /dev/i2c-* for an SHT31/SHT4x/BME280.
+# gpio: /dev/gpiomem and /dev/gpiochip* for a DHT22 or an IR illuminator.
+# video/render: only used if you set camera.source back to picamera2 and run
+# without MediaMTX.
+SupplementaryGroups=audio i2c gpio video render
+
+WorkingDirectory=/var/lib/babymon
+EnvironmentFile=/etc/babymon/babymon.env
+EnvironmentFile=-/etc/babymon/babymon.local.env
+
+# `babymon run` starts the API and every sensing loop in one process; see
+# pi/babymon/__main__.py for the subcommand list if this ever changes.
+ExecStart=/opt/babymon/venv/bin/babymon run --config /etc/babymon/babymon.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+
+# SIGINT rather than SIGTERM: it is what the asyncio loop and the capture
+# threads treat as "finish the current sample, close the database, stop".
+KillSignal=SIGINT
+KillMode=mixed
+# Long enough to flush a WAL checkpoint and close any open event.
+TimeoutStopSec=30
+
+Restart=always
+RestartSec=5
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=babymon-api
+
+# -- Resources --------------------------------------------------------------
+# YAMNet inference is the peak: a few hundred MB of arena in the worst case,
+# and only when the level gate opens. 768M leaves room for that plus the
+# SQLite page cache without letting a leak reach the OOM killer.
+MemoryMax=768M
+MemoryHigh=576M
+CPUWeight=100
+TasksMax=128
+LimitNOFILE=16384
+# Below MediaMTX: dropping an analysis frame is recoverable, dropping video
+# frames is visible in the recording.
+IOWeight=100
+
+# -- Sandboxing -------------------------------------------------------------
+#
+# ProtectSystem=strict makes the whole filesystem read-only, so every writable
+# location has to be named. If you moved paths.data_dir onto an SSD, that path
+# must appear in ReadWritePaths or the service will fail with EROFS on the
+# first write — install.sh rewrites this line for you.
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/babymon /var/log/babymon
+RuntimeDirectory=babymon
+RuntimeDirectoryMode=0750
+
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+UMask=0027
+
+# NOT set, deliberately:
+#   PrivateDevices=yes     — replaces /dev with a stub; the camera, the sound
+#                            card, I2C and GPIO all vanish.
+#   RestrictRealtime=yes   — PortAudio asks for a realtime scheduling class for
+#                            the capture callback. It degrades gracefully if
+#                            refused, but denying it costs xruns for nothing.
+#   ProtectProc=invisible  — /api/system/info reports per-process memory.
+#   MemoryDenyWriteExecute — numpy and the TFLite runtime both JIT.
+
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+DevicePolicy=closed
+# /dev/snd/* — the microphone.
+DeviceAllow=char-alsa rw
+# /dev/i2c-* — SHT31 / SHT4x / BME280.
+DeviceAllow=char-i2c rw
+# GPIO, for a DHT22 or an IR illuminator on camera.night_vision.ir_led_gpio.
+DeviceAllow=char-gpiochip rw
+DeviceAllow=/dev/gpiomem rw
+DeviceAllow=/dev/gpiomem0 rw
+# /dev/vcio — `vcgencmd measure_temp` and `vcgencmd get_throttled`, which is
+# how the health endpoint reports overnight thermal throttling.
+DeviceAllow=/dev/vcio rw
+# Only reached when camera.source is picamera2 rather than the RTSP hub.
+DeviceAllow=char-video4linux rw
+DeviceAllow=char-media rw
+DeviceAllow=char-dma_heap rw
+DeviceAllow=/dev/vchiq rw
+
+[Install]
+WantedBy=multi-user.target

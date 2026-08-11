@@ -1,0 +1,126 @@
+.btn {
+  --btn-bg: var(--surface-2);
+  --btn-fg: var(--text);
+  --btn-border: var(--border);
+  --btn-bg-hover: var(--surface-hover);
+  --btn-bg-active: var(--surface-active);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--tap-target);
+  padding: 0 var(--space-4);
+  border: var(--border-width) solid var(--btn-border);
+  border-radius: var(--radius-md);
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  line-height: 1;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--btn-bg-hover);
+}
+
+.btn:active:not(:disabled) {
+  background: var(--btn-bg-active);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+}
+
+/* -- Variants ------------------------------------------------------------- */
+
+.btn--primary {
+  --btn-bg: var(--accent);
+  --btn-fg: var(--accent-fg);
+  --btn-border: transparent;
+  --btn-bg-hover: var(--accent-hover);
+  --btn-bg-active: var(--accent-active);
+}
+
+.btn--secondary {
+  --btn-bg: var(--surface-2);
+  --btn-fg: var(--text);
+  --btn-border: var(--border-strong);
+}
+
+.btn--ghost {
+  --btn-bg: transparent;
+  --btn-fg: var(--text-secondary);
+  --btn-border: transparent;
+  --btn-bg-hover: var(--surface-hover);
+  --btn-bg-active: var(--surface-active);
+}
+
+.btn--ghost:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.btn--danger {
+  --btn-bg: var(--danger-soft);
+  --btn-fg: var(--danger-soft-fg);
+  --btn-border: transparent;
+  --btn-bg-hover: var(--danger);
+  --btn-bg-active: var(--danger);
+}
+
+.btn--danger:hover:not(:disabled),
+.btn--danger:active:not(:disabled) {
+  color: var(--danger-fg);
+}
+
+/* -- Sizes ---------------------------------------------------------------- */
+
+.btn--sm {
+  min-height: 2.125rem;
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+  border-radius: var(--radius-sm);
+}
+
+.btn--lg {
+  min-height: 3.25rem;
+  padding: 0 var(--space-6);
+  font-size: var(--text-md);
+}
+
+.btn--block {
+  display: flex;
+  width: 100%;
+}
+
+/* -- Parts ---------------------------------------------------------------- */
+
+.btn__icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.btn__label--hidden {
+  visibility: hidden;
+  /* Removed from the accessibility tree so the spinner label is the only
+     thing announced, but still occupying its width. */
+  position: absolute;
+}
+
+.btn.is-loading {
+  position: relative;
+}
+
+@media (forced-colors: active) {
+  .btn {
+    border: 1px solid ButtonBorder;
+  }
+}

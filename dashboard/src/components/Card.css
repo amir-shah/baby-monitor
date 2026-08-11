@@ -1,0 +1,67 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+  overflow: clip;
+}
+
+.card__header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-4) 0;
+}
+
+.card__heading {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.card__title {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.card__subtitle {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.card__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: 0 0 auto;
+  /* Pull icon buttons back so their tap padding does not push the header out. */
+  margin: calc(var(--space-2) * -1) calc(var(--space-2) * -1) 0 0;
+}
+
+.card__body {
+  padding: var(--space-4);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.card--flush > .card__body {
+  padding: 0;
+}
+
+.card__footer {
+  padding: var(--space-3) var(--space-4);
+  border-top: var(--border-width) solid var(--border-subtle);
+  background: var(--surface-2);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.card[aria-busy='true'] {
+  /* Content underneath a loading overlay should not read as interactive. */
+  cursor: progress;
+}

@@ -1,0 +1,106 @@
+[Unit]
+Description=babymon camera hub (MediaMTX)
+Documentation=file:///opt/babymon/docs/ARCHITECTURE.md
+Documentation=https://github.com/bluenviron/mediamtx
+
+# This unit owns the camera. A CSI camera can only be opened once, so nothing
+# else in the system may touch /dev/video* — the API and the HomeKit bridge are
+# both RTSP clients of this process. Starting it first, and keeping it up
+# independently, is what stops a crash in the Python analysis from taking the
+# video down with it.
+After=network-online.target
+Wants=network-online.target
+
+# Ten restarts in five minutes means it is not going to recover on its own.
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=exec
+User=babymon
+Group=babymon
+# video: /dev/video*, /dev/media*, /dev/dma_heap, /dev/vchiq on Raspberry Pi OS.
+# render: /dev/dri, which some libcamera pipelines want.
+SupplementaryGroups=video render
+
+EnvironmentFile=-/etc/babymon/babymon.env
+ExecStart=/usr/local/bin/mediamtx /etc/babymon/mediamtx.yml
+
+Restart=always
+RestartSec=5
+
+# Logs to journald. `journalctl -u babymon-mediamtx -f`.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=babymon-mediamtx
+
+# -- Resources --------------------------------------------------------------
+# Hardware-encoding 720p15 is nearly free; this ceiling exists to make a leak
+# visible rather than to constrain normal operation.
+MemoryMax=256M
+MemoryHigh=192M
+CPUWeight=200
+TasksMax=64
+LimitNOFILE=8192
+# The video path is the one thing that must not be starved by the analytics.
+IOWeight=200
+Nice=-5
+
+# -- Sandboxing -------------------------------------------------------------
+#
+# The interesting constraint: PrivateDevices=yes would be the obvious hardening
+# flag and it is exactly wrong here — it replaces /dev with a minimal private
+# tmpfs, so the camera disappears. DevicePolicy=closed plus an explicit
+# allow-list gives the same benefit without breaking the one thing this service
+# exists to do.
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateUsers=no
+ProtectSystem=strict
+ProtectHome=yes
+# MediaMTX writes nothing: no recording, no state. Only the read-only config.
+ReadWritePaths=
+RuntimeDirectory=babymon-mediamtx
+RuntimeDirectoryMode=0750
+
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+RemoveIPC=yes
+UMask=0027
+
+# Loopback RTSP and the loopback HTTP API. AF_NETLINK because the Go runtime
+# enumerates interfaces at startup.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+IPAddressAllow=localhost
+IPAddressDeny=any
+
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+DevicePolicy=closed
+# /dev/video* — the sensor and the ISP nodes.
+DeviceAllow=char-video4linux rw
+# /dev/media* — the libcamera media controller graph.
+DeviceAllow=char-media rw
+# /dev/dma_heap/* — where libcamera allocates its buffers on Bookworm.
+DeviceAllow=char-dma_heap rw
+# /dev/dri/* — used by the software ISP path and by some tuning files.
+DeviceAllow=char-drm rw
+# The VideoCore mailbox and the legacy VCHIQ interface.
+DeviceAllow=/dev/vchiq rw
+DeviceAllow=/dev/vcio rw
+
+[Install]
+WantedBy=multi-user.target

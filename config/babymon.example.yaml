@@ -1,0 +1,471 @@
+# babymon configuration
+#
+# Copy to config/babymon.yaml and edit. Every value below is the default, so a
+# minimal config file is legal — you only need to write down what you change.
+#
+# Any value can be overridden from the environment with a BABYMON_ prefix and
+# double underscores for nesting:
+#     BABYMON_API__AUTH__PASSWORD=hunter2
+#     BABYMON_AUDIO__DEVICE=plughw:1,0
+# Environment overrides win over the file. Secrets belong in the environment
+# (or an EnvironmentFile= for the systemd unit), not in this file.
+
+# ---------------------------------------------------------------------------
+site:
+  # Friendly name shown in the dashboard and used as the HomeKit accessory name.
+  name: "Nursery"
+  # IANA timezone. null = use the system timezone. Everything about "nights"
+  # depends on this being right.
+  timezone: null
+
+paths:
+  # Root for all mutable state. On a Pi with an SSD, point this at the SSD:
+  # SD cards do not enjoy a database being written to every 15 seconds.
+  data_dir: "/var/lib/babymon"
+  db: "${data_dir}/babymon.db"
+  media_dir: "${data_dir}/media"
+  # HAP pairing state for the HomeKit bridge.
+  hap_dir: "${data_dir}/hap"
+  models_dir: "${data_dir}/models"
+  # Built dashboard assets; the API serves these when the directory exists.
+  static_dir: null
+
+# ---------------------------------------------------------------------------
+children:
+  - name: "Kiddo"
+    # Used to pick the age-appropriate sleep-duration target band. Optional.
+    birthdate: null            # "2022-03-14"
+    room: "Nursery"
+    # Local hour that separates one night from the next. 12 means a night is
+    # named after the date its evening fell on, and anything logged up to noon
+    # the following day still belongs to it.
+    day_boundary_hour: 12
+    target_bedtime: "19:30"
+    target_waketime: "07:00"
+    avatar_color: "#7aa2f7"
+
+# ---------------------------------------------------------------------------
+camera:
+  enabled: true
+  # picamera2 | v4l2 | rtsp | file | synthetic | none
+  #   picamera2 - the Raspberry Pi camera stack (CSI ribbon cameras). Preferred.
+  #   v4l2      - a USB webcam on /dev/videoN.
+  #   rtsp      - an existing RTSP camera elsewhere on the network.
+  #   file      - loop a video file; for development.
+  #   synthetic - a generated test pattern; for development and CI.
+  source: "picamera2"
+  device: "/dev/video0"        # v4l2 only
+  url: null                    # rtsp/file only
+  # Main (recorded/streamed) stream.
+  width: 1280
+  height: 720
+  fps: 15
+  bitrate_kbps: 1500
+  rotation: 0                  # 0 | 90 | 180 | 270
+  hflip: false
+  vflip: false
+  # Low-resolution stream used for motion analysis. Cheap by design.
+  lores_width: 320
+  lores_height: 240
+  # Where the capture service republishes H.264 so that several consumers (the
+  # HomeKit bridge, snapshotting, recording) can share one camera. See
+  # docs/ARCHITECTURE.md — the camera device can only be opened once.
+  rtsp_enabled: true
+  rtsp_url: "rtsp://127.0.0.1:8554/babymon"
+  # Force a specific H.264 encoder. null = autodetect (hardware where it
+  # exists, e.g. Pi 4 and earlier; software on Pi 5, which dropped the
+  # hardware H.264 encoder).
+  encoder: null                # null | "hardware" | "software"
+  night_vision:
+    # Detect low light and relax the exposure/denoise settings for it.
+    auto: true
+    # Mean-luma threshold (0-255) below which the room counts as dark.
+    dark_threshold: 40
+    # GPIO pin driving an IR illuminator, if you have one wired up.
+    ir_led_gpio: null
+
+motion:
+  enabled: true
+  # Fraction of the low-res frame that must change for a pixel-level hit.
+  pixel_threshold: 18          # 0-255 per-pixel luma delta
+  # Score above which motion is considered active, and the lower value it must
+  # fall back below to be considered over (hysteresis).
+  on_threshold: 0.012
+  off_threshold: 0.005
+  # Sustained duration required before an event opens / closes.
+  min_on_s: 1.5
+  min_off_s: 8.0
+  # Ignore motion entirely for this long after the camera (re)starts.
+  warmup_s: 10
+  # Rectangles to ignore, as fractions of the frame: [x, y, w, h].
+  masks: []
+
+# ---------------------------------------------------------------------------
+audio:
+  enabled: true
+  # ALSA device. "default" usually works; use `arecord -l` to find yours.
+  # If the HomeKit bridge also needs the mic, point both at a dsnoop device —
+  # see deploy/asound.conf.example.
+  device: "default"
+  sample_rate: 16000
+  channels: 1
+  # Detection runs on the A-weighted level. Traffic rumble is mostly below
+  # 200 Hz, which A-weighting attenuates by 20-40 dB, so the detector stops
+  # reacting to lorries going past without any extra logic.
+  a_weighting: true
+  # Analysis frame; 0.975 s is YAMNet's native window.
+  frame_s: 0.975
+  hop_s: 0.5
+  # Gain applied before analysis, dB. Raise for a quiet mic.
+  gain_db: 0.0
+
+  noise_floor:
+    # The floor adapts so the detector works in any room, including one with a
+    # white-noise machine running all night.
+    window_s: 300
+    percentile: 20
+    # Never let the floor drift outside this band.
+    min_dbfs: -75
+    max_dbfs: -25
+
+  classifier:
+    # yamnet | heuristic | none
+    #   yamnet    - AudioSet sound classification, best accuracy. Needs the
+    #               model file; `babymon-setup fetch-models` downloads it.
+    #   heuristic - spectral/pitch/periodicity rules, no model needed.
+    #   none      - level-based detection only.
+    # Falls back to heuristic automatically if the model or runtime is absent.
+    backend: "yamnet"
+    model_path: "${paths.models_dir}/yamnet.tflite"
+    class_map_path: "${paths.models_dir}/yamnet_class_map.csv"
+    # Only run the model when the level is at least this far above the floor.
+    # Keeps the CPU asleep for most of a quiet night.
+    gate_db_above_floor: 6.0
+    # Threads for the TFLite interpreter. 1 is plenty at one inference every
+    # half second and leaves the other cores for video.
+    threads: 1
+
+  detector:
+    # Dual-condition hysteresis. An event opens only when the level AND the
+    # class score are both over their upper thresholds, and closes when EITHER
+    # falls under its lower one. Level alone opens on an HVAC ramp; score alone
+    # opens on background misclassification. Both together open on neither.
+    #
+    # Level must exceed floor + on_db_above_floor to open, and fall under
+    # floor + off_db_above_floor to close. Do not shrink the 5 dB gap.
+    on_db_above_floor: 10.0
+    off_db_above_floor: 5.0
+    # The same idea applied to the classifier score.
+    score_on: 0.45
+    score_off: 0.30
+    # An escape hatch on a different axis. A sound the classifier is this sure
+    # about opens an event once it is merely audible, without having to clear
+    # the level threshold. This is what catches a quiet whimper next to a
+    # white-noise machine; broadband room noise never scores this high, so it
+    # does not readmit the false positives the level threshold guards against.
+    score_high: 0.80
+    min_duration_s: 2.0
+    # Merge two events separated by less than this into one.
+    merge_gap_s: 20.0
+    # Suppress repeat events of the same label for this long after one closes.
+    cooldown_s: 15.0
+    # Median (not mean) filter width over classifier scores. A median of five
+    # frames rejects a single-frame spike — a door slam, a cot creak — outright;
+    # an average merely attenuates it and smears the event boundaries.
+    smoothing_frames: 5
+    # Sounds that are the room, not the child. Their scores are zeroed before
+    # the dominant class is chosen, which is what stops a nursery white-noise
+    # machine from generating "White noise" events all night. Names must match
+    # the YAMNet class map exactly.
+    background_classes:
+      - "Mechanical fan"
+      - "Air conditioning"
+      - "Rumble"
+      - "Hum"
+      - "Silence"
+      - "Inside, small room"
+      - "Noise"
+      - "Environmental noise"
+      - "Static"
+      - "Mains hum"
+      - "White noise"
+      - "Pink noise"
+      - "Throbbing"
+      - "Vibration"
+    # Per-label confidence required to attach that label to an event.
+    label_thresholds:
+      cry: 0.45
+      fuss: 0.35
+      whimper: 0.35
+      scream: 0.50
+      talk: 0.45
+      cough: 0.40
+      snore: 0.40
+      door: 0.45
+    # Labels that count as "the child may be waking" — these drive the
+    # awakening logic, the HomeKit sound sensor and notifications.
+    wake_labels: ["cry", "fuss", "whimper", "scream", "talk"]
+
+  clips:
+    # Save a short audio clip around each event, so you can hear what it was
+    # rather than trusting the classifier. Continuous audio is never stored.
+    enabled: true
+    pre_s: 4.0
+    post_s: 6.0
+    # Only clip events at or above this severity.
+    min_severity: "notice"
+    format: "opus"             # opus | aac | wav
+    bitrate_kbps: 32
+
+  snapshots:
+    # Also grab a still image when an event opens.
+    enabled: true
+    min_severity: "notice"
+
+# ---------------------------------------------------------------------------
+environment:
+  enabled: true
+  # dht22 | bme280 | sht31 | sht4x | synthetic | none
+  # DHT22 is the sensor the original build used; it is also the least reliable
+  # and does not work on a Pi 5 without extra effort. BME280/SHT31 over I2C are
+  # a straight upgrade. See docs/HARDWARE.md.
+  sensor: "dht22"
+  gpio_pin: 4                  # dht22 only (BCM numbering)
+  i2c_bus: 1                   # i2c sensors only
+  i2c_address: null            # null = the sensor's default
+  poll_s: 60
+  temp_offset_c: 0.0
+  humidity_offset_pct: 0.0
+  # Comfort band used by the environment subscore and the alerts below.
+  comfort:
+    temp_c_min: 19.0
+    temp_c_max: 21.5
+    humidity_min: 40.0
+    humidity_max: 60.0
+  alerts:
+    enabled: true
+    # Must be outside the comfort band this long before an event is logged.
+    sustained_min: 15
+
+# ---------------------------------------------------------------------------
+sleep:
+  # How often the state machine ticks and a telemetry row is written.
+  sample_interval_s: 15
+  # The window in which a night session is allowed to begin, local time.
+  # Keeps an afternoon nap from being mistaken for the start of the night.
+  bedtime_window: ["17:00", "23:59"]
+  wake_window: ["04:00", "11:00"]
+  # A sustained quiet, still period this long counts as sleep onset.
+  onset_quiet_min: 12
+  # An awakening must last at least this long to be counted in WASO and in the
+  # awakenings tally. Shorter disturbances become "restless" instead.
+  awakening_min_min: 5
+  # Sustained activity this long inside the wake window ends the night.
+  final_wake_min: 20
+  # No motion and no sound at all for this long means nobody is in the room.
+  absent_after_min: 25
+  # Also track daytime naps as their own (shorter) sessions.
+  track_naps: true
+  nap_min_duration_min: 20
+
+scoring:
+  # Weights for the composite 0-100 quality score. They are normalised, so
+  # they need not sum to 1. Set any of them to 0 to drop that component; if a
+  # component cannot be computed on a given night it is dropped and the rest
+  # are renormalised, rather than being given a made-up value.
+  # These defaults follow the mix consumer sleep trackers converge on
+  # (duration ~40-50%, continuity/efficiency ~25-30%), with the weight those
+  # trackers give to sleep staging moved to timing consistency, because a
+  # camera and microphone cannot see sleep stages but can see regularity.
+  # docs/ANALYTICS.md derives every constant.
+  weights:
+    duration: 0.40       # 24h total sleep against the age-appropriate band
+    efficiency: 0.20     # TST / time in bed
+    continuity: 0.20     # WASO, awakenings, longest unbroken bout
+    timing: 0.20         # sleep regularity index and midpoint consistency
+    environment: 0.00    # temperature, humidity and noise during sleep
+  # Nights with less than this sensor coverage are marked 'partial' and left
+  # out of the analytics by default.
+  min_coverage: 0.6
+
+analytics:
+  # Default outcome metric for the factor analysis.
+  default_metric: "quality_score"
+  default_window_days: 180
+  # A factor needs at least this many nights WITH the tag and this many
+  # WITHOUT before any comparison is shown. Ten is not a stylistic choice:
+  # below ten per side the only effects detectable at 80% power are ones so
+  # large you would have noticed them without statistics, and the few that do
+  # reach significance are biased upward in magnitude ("winner's curse").
+  # Under this threshold the UI shows a progress counter instead of a number.
+  min_nights_per_group: 10
+  # Total analysable nights required in the window before any comparison runs.
+  min_nights_total: 20
+  # Permutation test iterations. 10000 is fast enough on a Pi and gives a
+  # p-value resolution of 1e-4.
+  permutations: 10000
+  bootstrap_iterations: 5000
+  # Benjamini-Hochberg false discovery rate. 0.10 rather than 0.05 because
+  # this is exploratory personal analytics, not confirmatory research.
+  fdr_q: 0.10
+  # Nights are autocorrelated (children have good weeks and bad weeks) and so
+  # are habits, which together inflate the false-positive rate of a naive test
+  # from 5% to nearly 20%. Permuting by circular shift of the tag vector
+  # preserves both run structures and removes most of that inflation.
+  permutation_mode: "circular_shift"   # circular_shift | shuffle
+  # Shrink each tag's effect toward zero in proportion to its own noise, so a
+  # tag with eleven nights stops automatically topping the list.
+  shrinkage: true
+  # Two tags applied on nearly the same nights cannot be told apart; above this
+  # phi coefficient they are flagged as confounded with each other.
+  confound_phi_threshold: 0.3
+  # Above this, they are near-duplicates and the UI offers to merge them.
+  duplicate_phi_threshold: 0.6
+  # A tag whose nights all fall in one stretch of the record cannot be told
+  # apart from the child simply growing older. Flag it when its nights span
+  # less than this fraction of the window.
+  min_span_fraction: 0.4
+  random_seed: 20260101
+
+# ---------------------------------------------------------------------------
+api:
+  host: "0.0.0.0"
+  port: 8080
+  cors_origins: ["http://localhost:5173"]
+  auth:
+    # A nursery camera dashboard should have a password even on your own LAN.
+    enabled: true
+    # Set BABYMON_API__AUTH__PASSWORD instead of writing it here.
+    password: null
+    # Extra long-lived bearer tokens, e.g. for the HomeKit bridge.
+    tokens: []
+    session_days: 30
+    # Signed query tokens for <img>/<video> tags that cannot send headers.
+    media_token_ttl_s: 3600
+  notes:
+    # Let clients create tags just by referring to a new slug.
+    autocreate_tags: true
+  sse_heartbeat_s: 20
+
+retention:
+  # 0 disables pruning for that class of data.
+  samples_days: 400
+  events_days: 400
+  audio_clips_days: 30
+  snapshots_days: 30
+  video_clips_days: 14
+  system_log_days: 30
+  # Cap total media size; the oldest clips go first once it is exceeded.
+  media_max_gb: 8.0
+  run_at: "03:30"
+
+backup:
+  enabled: true
+  # VACUUM INTO a dated copy of the database.
+  dir: "${paths.data_dir}/backups"
+  keep: 7
+  run_at: "03:45"
+
+# ---------------------------------------------------------------------------
+homekit:
+  enabled: true
+  # Shown in the Home app.
+  name: "Baby Monitor"
+  # 8 digits. Change it. Set BABYMON_HOMEKIT__PIN to keep it out of the file.
+  pin: "031-45-154"
+  # 4 uppercase alphanumerics, used for the pairing QR code.
+  setup_id: "BBMN"
+  # null = derived deterministically from the machine id.
+  username: null               # "CC:22:3D:E3:CE:F6"
+  port: 51826
+  # ciao | bonjour-hap | avahi. avahi reuses the system daemon and is the
+  # least likely to fight with other mDNS responders on a Pi.
+  advertiser: "ciao"
+  # Where the bridge reaches the Python API.
+  api_url: "http://127.0.0.1:8080"
+  api_token: null              # set BABYMON_HOMEKIT__API_TOKEN
+
+  video:
+    # Source the bridge transcodes for HomeKit. Defaults to camera.rtsp_url.
+    source_url: null
+    # Copy the H.264 stream through untouched when the source is already
+    # HomeKit-compatible. Much cheaper than re-encoding; turn it off if the
+    # Home app shows a black frame.
+    copy_video: true
+    max_width: 1280
+    max_height: 720
+    max_fps: 15
+    max_bitrate_kbps: 1500
+    # Extra ffmpeg args, appended verbatim. For debugging.
+    extra_args: []
+    debug: false
+
+  audio:
+    # Live-stream audio to the Home app.
+    enabled: true
+    # Mic device for the bridge. Use a dsnoop device if Python has the mic too.
+    device: "default"
+    codec: "libopus"           # libopus | libfdk_aac
+    bitrate_kbps: 24
+    sample_rate: 24000
+    # Two-way audio: speak into the Home app and it comes out of the Pi.
+    two_way: false
+    playback_device: "default"
+
+  hksv:
+    # HomeKit Secure Video. Requires an iCloud+ plan and a home hub
+    # (Apple TV 4K or HomePod). See docs/HOMEKIT.md.
+    enabled: true
+    # Seconds of video kept before the trigger, so a recording starts before
+    # the noise did. HomeKit asks for 4 s; the ring buffer holds a bit more.
+    prebuffer_s: 6
+    # Length of each fMP4 fragment handed to HomeKit, milliseconds.
+    fragment_ms: 4000
+    max_width: 1920
+    max_height: 1080
+    max_fps: 30
+    max_bitrate_kbps: 2000
+    audio: true
+    # Which local detections ask HomeKit to record.
+    triggers: ["motion", "sound"]
+
+  sensors:
+    temperature: true
+    humidity: true
+    motion: true
+    # Exposed as an occupancy sensor: "a sound that might be the child waking".
+    sound: true
+    # A contact sensor that reads open while the child is awake — handy as an
+    # automation trigger ("if awake after 06:00, turn on the hall light").
+    awake_contact: true
+
+  # Switches in the Home app that log a tag against tonight, so you can say
+  # "Hey Siri, dessert before bedtime" instead of opening the dashboard.
+  # They reset themselves at the day boundary.
+  tag_switches:
+    - slug: "dessert-before-bed"
+      label: "Dessert Before Bed"
+    - slug: "screen-before-bed"
+      label: "Screen Before Bed"
+    - slug: "late-nap"
+      label: "Late Nap"
+    - slug: "teething"
+      label: "Teething"
+
+notifications:
+  enabled: false
+  # Only notify for events at or above this severity.
+  min_severity: "alert"
+  # Do not notify between these local times.
+  quiet_hours: null            # ["23:00", "06:00"]
+  # Webhook receives a JSON POST of the event. Works with ntfy, Pushover
+  # (via a relay), Home Assistant, Slack, or anything else that speaks HTTP.
+  webhook_url: null
+  webhook_headers: {}
+
+logging:
+  level: "INFO"
+  # json is easier to grep in journalctl; text is easier to read.
+  format: "text"
+  # Mirror the log to a file in addition to stdout/journald.
+  file: null

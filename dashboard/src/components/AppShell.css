@@ -1,0 +1,281 @@
+.shell {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+/* -- Skip link ------------------------------------------------------------ */
+
+.skip-link:focus {
+  position: fixed;
+  z-index: var(--z-toast);
+  top: var(--space-3);
+  left: var(--space-3);
+  width: auto;
+  height: auto;
+  padding: var(--space-3) var(--space-4);
+  clip-path: none;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  border: var(--border-width) solid var(--border-strong);
+  box-shadow: var(--shadow-2);
+  color: var(--text);
+}
+
+/* -- Header --------------------------------------------------------------- */
+
+.shell__header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  /* Opaque fallback first, for engines without color-mix. */
+  background: var(--bg);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: var(--border-width) solid var(--border-subtle);
+  padding-top: env(safe-area-inset-top, 0);
+}
+
+@supports not (backdrop-filter: blur(10px)) {
+  .shell__header {
+    background: var(--bg);
+  }
+}
+
+.shell__header-inner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--header-h);
+  padding-inline: var(--space-4);
+  max-width: var(--content-max);
+  margin-inline: auto;
+  width: 100%;
+}
+
+.shell__brand {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+.shell__site {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  line-height: 1.2;
+}
+
+.shell__title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell__header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: 0 0 auto;
+  margin-inline-end: calc(var(--space-2) * -1);
+}
+
+.shell__banner {
+  padding: 0 var(--space-4) var(--space-3);
+  max-width: var(--content-max);
+  margin-inline: auto;
+}
+
+/* -- Main ----------------------------------------------------------------- */
+
+.shell__main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.shell__main:focus {
+  outline: none;
+}
+
+.shell__content {
+  max-width: var(--content-max);
+  margin-inline: auto;
+  padding: var(--space-4);
+  /* Clear the bottom nav plus the home indicator. */
+  padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + var(--space-6));
+}
+
+/* -- Nav: bottom bar on a phone ------------------------------------------- */
+
+.shell__nav {
+  position: fixed;
+  z-index: var(--z-nav);
+  inset-inline: 0;
+  bottom: 0;
+  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: var(--border-width) solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+@supports not (backdrop-filter: blur(12px)) {
+  .shell__nav {
+    background: var(--surface);
+  }
+}
+
+.shell__nav-list {
+  display: flex;
+  align-items: stretch;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-width: var(--content-max);
+  margin-inline: auto;
+}
+
+.shell__nav-item {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.shell__nav-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: var(--nav-h);
+  padding: var(--space-1) 2px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-medium);
+  position: relative;
+  transition: color var(--dur-fast) var(--ease-out);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.shell__nav-link:hover {
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+/* Active state is carried by colour, weight AND a top rule, so it survives
+   greyscale and colour-blindness. */
+.shell__nav-link.is-active {
+  color: var(--accent);
+  font-weight: var(--weight-semibold);
+}
+
+.shell__nav-link.is-active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  inset-inline: 22%;
+  height: 2px;
+  border-radius: 0 0 var(--radius-full) var(--radius-full);
+  background: currentcolor;
+}
+
+.shell__nav-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell__nav-icon {
+  display: inline-flex;
+}
+
+/* -- Nav: side rail from 60rem -------------------------------------------- */
+
+@media (min-width: 60rem) {
+  .shell {
+    display: grid;
+    grid-template-columns: var(--sidebar-w) 1fr;
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      'nav header'
+      'nav main';
+  }
+
+  .shell__header {
+    grid-area: header;
+  }
+
+  .shell__header-inner,
+  .shell__banner,
+  .shell__content {
+    max-width: var(--content-max);
+    margin-inline: 0;
+  }
+
+  .shell__main {
+    grid-area: main;
+  }
+
+  .shell__content {
+    padding: var(--space-6);
+    padding-bottom: var(--space-9);
+  }
+
+  .shell__nav {
+    grid-area: nav;
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100dvh;
+    inset-inline: auto;
+    bottom: auto;
+    border-top: 0;
+    border-inline-end: var(--border-width) solid var(--border);
+    padding: var(--space-4) var(--space-2);
+    background: var(--surface);
+    backdrop-filter: none;
+  }
+
+  .shell__nav-list {
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .shell__nav-link {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: var(--space-3);
+    min-height: var(--tap-target);
+    padding: 0 var(--space-3);
+    border-radius: var(--radius-md);
+    font-size: var(--text-base);
+  }
+
+  .shell__nav-link:hover {
+    background: var(--surface-hover);
+  }
+
+  .shell__nav-link.is-active {
+    background: var(--accent-soft);
+    color: var(--accent-soft-fg);
+  }
+
+  .shell__nav-link.is-active::before {
+    top: 50%;
+    translate: 0 -50%;
+    inset-inline: 0 auto;
+    width: 3px;
+    height: 1.25rem;
+    border-radius: var(--radius-full);
+    background: var(--accent);
+  }
+}

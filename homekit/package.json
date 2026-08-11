@@ -1,0 +1,30 @@
+{
+  "name": "babymon-homekit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "HomeKit accessory for babymon: live camera, HomeKit Secure Video, and nursery sensors",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "babymon-homekit": "dist/index.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test --import tsx test/*.test.ts",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@homebridge/hap-nodejs": "^2.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

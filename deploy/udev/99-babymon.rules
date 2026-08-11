@@ -1,0 +1,59 @@
+# babymon device permissions.
+#
+# Raspberry Pi OS already ships rules for most of this in
+# /lib/udev/rules.d/99-com.rules and friends. These are here for the cases
+# where it does not, or where a plain Debian arm64 image is being used, and
+# they are written to be harmless when the distro rule already applied.
+#
+# Install:  sudo cp deploy/udev/99-babymon.rules /etc/udev/rules.d/
+#           sudo udevadm control --reload-rules && sudo udevadm trigger
+
+# ---------------------------------------------------------------------------
+# libcamera buffer allocation
+# ---------------------------------------------------------------------------
+# On Bookworm libcamera allocates through the DMA heap rather than the old
+# VCSM interface. Without group access here, MediaMTX starting as a non-root
+# user fails with "failed to allocate buffers" and nothing more specific.
+SUBSYSTEM=="dma_heap", GROUP="video", MODE="0660"
+
+# The VideoCore mailbox. Used by the camera stack and by vcgencmd, which is how
+# the health endpoint reads the sticky thermal-throttle bits.
+KERNEL=="vcio", GROUP="video", MODE="0660"
+KERNEL=="vchiq", GROUP="video", MODE="0660"
+
+# The media controller graph libcamera walks to find the sensor.
+SUBSYSTEM=="media", GROUP="video", MODE="0660"
+
+# ---------------------------------------------------------------------------
+# GPIO — only needed for a DHT22 or an IR illuminator on a GPIO pin
+# ---------------------------------------------------------------------------
+SUBSYSTEM=="bcm2835-gpiomem", GROUP="gpio", MODE="0660"
+SUBSYSTEM=="gpio", GROUP="gpio", MODE="0660"
+KERNEL=="gpiochip*", GROUP="gpio", MODE="0660"
+
+# ---------------------------------------------------------------------------
+# I2C — SHT31 / SHT4x / BME280
+# ---------------------------------------------------------------------------
+# Enable the bus first: `sudo raspi-config nonint do_i2c 0`, or add
+# `dtparam=i2c_arm=on` to /boot/firmware/config.txt. Then `i2cdetect -y 1`
+# should show your sensor (0x44 for SHT31/SHT4x, 0x76 or 0x77 for BME280).
+SUBSYSTEM=="i2c-dev", GROUP="i2c", MODE="0660"
+
+# ---------------------------------------------------------------------------
+# A stable name for the microphone
+# ---------------------------------------------------------------------------
+# ALSA card *numbers* are assigned in probe order, so `hw:1,0` becomes `hw:2,0`
+# the day you plug in a USB DAC — and the detector then records silence from
+# the wrong device without complaining. Two better options, in order:
+#
+#   1. Use the by-name PCM form in the config: `arecord -L` prints names like
+#      `hw:CARD=Device,DEV=0`, which do not renumber. This is what
+#      deploy/asound.conf.example does.
+#
+#   2. Pin the index at module load, in /etc/modprobe.d/babymon-alsa.conf:
+#          options snd_usb_audio index=1 vid=0x8086 pid=0x0808
+#      (find vid/pid with `lsusb`), or for the built-in and I2S cards:
+#          options snd_bcm2835 index=0
+#
+# A udev rule cannot reorder ALSA cards, so there is nothing to put here — this
+# comment exists so the next person does not go looking for one.

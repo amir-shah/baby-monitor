@@ -1,0 +1,92 @@
+/* One-tap event relabelling. Every control here is a 44px target. */
+
+.label-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.label-picker__prompt {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.label-picker__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.label-picker__label,
+.label-picker__void,
+.label-picker__undo,
+.label-picker__open {
+  min-height: var(--tap-target);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.2;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.label-picker__label:hover,
+.label-picker__void:hover,
+.label-picker__undo:hover,
+.label-picker__open:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+/* Selection is a border weight and a check glyph as well as a fill, so it
+   survives both a greyscale screen and forced-colors mode. */
+.label-picker__label.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-soft-fg);
+  font-weight: var(--weight-semibold);
+}
+
+.label-picker__void.is-active {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+  color: var(--danger-soft-fg);
+  font-weight: var(--weight-semibold);
+}
+
+.label-picker__undo {
+  border-style: dashed;
+  color: var(--text-muted);
+}
+
+.label-picker__open {
+  border-style: dashed;
+  color: var(--text-muted);
+  padding-inline: var(--space-4);
+}
+
+.label-picker__label:disabled,
+.label-picker__void:disabled,
+.label-picker__undo:disabled {
+  opacity: 0.55;
+}
+
+.label-picker--collapsed {
+  flex-direction: row;
+}
+
+@media (forced-colors: active) {
+  .label-picker__label.is-active,
+  .label-picker__void.is-active {
+    border-width: 3px;
+  }
+}

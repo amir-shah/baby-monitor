@@ -1,0 +1,62 @@
+/* Event media: audio clips mostly, video and snapshots occasionally. */
+
+.clips {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.clips__load {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap-target);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  text-align: left;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.clips__load:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.clips__play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  color: var(--accent-soft-fg);
+  font-size: 0.6rem;
+  /* The glyph's optical centre sits left of its box. */
+  padding-left: 2px;
+}
+
+.clips__duration {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.clips__audio {
+  width: 100%;
+  min-height: var(--tap-target);
+}
+
+.clips__video,
+.clips__image {
+  width: 100%;
+  max-height: 60vh;
+  border-radius: var(--radius-sm);
+  background: var(--surface-inset);
+}

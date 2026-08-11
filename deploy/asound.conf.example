@@ -1,0 +1,218 @@
+# ALSA configuration for babymon.  Install as /etc/asound.conf.
+#
+# THE PROBLEM THIS SOLVES
+#
+# An ALSA capture device can be opened by exactly one process. babymon has two
+# that want the microphone at the same time:
+#
+#   * babymon-api    — the cry detector, running continuously all night.
+#   * babymon-homekit — ffmpeg, spawned on demand whenever you open the camera
+#                       in the Home app or HKSV starts a recording.
+#
+# Whichever one starts second gets EBUSY ("Device or resource busy"), and
+# because the bridge's is the one that starts second, the symptom is "the
+# monitor works but there is no sound in HomeKit". The fix is `dsnoop`: a
+# software mixer that opens the hardware once and fans the same PCM out to
+# every client. Point BOTH `audio.device` and `homekit.audio.device` at the
+# dsnoop device below and they stop fighting.
+#
+# `dmix` is the same trick in the playback direction, needed only if you turn
+# on two-way audio (homekit.audio.two_way).
+#
+# BEFORE YOU EDIT: find your card.
+#
+#     arecord -l              # capture devices, with card and device numbers
+#     aplay   -l              # playback devices
+#     arecord -L              # the full PCM name list
+#     cat /proc/asound/cards
+#
+# Then replace `hw:1,0` below with your card. Prefer the by-name form —
+# `hw:CARD=Device,DEV=0` — because card *numbers* are assigned in probe order
+# and will change the day you plug in a USB DAC. `arecord -L` prints the names.
+#
+# ---------------------------------------------------------------------------
+# TURN OFF AUTOMATIC GAIN CONTROL. This matters more than anything else here.
+# ---------------------------------------------------------------------------
+#
+#     amixer -c 1 controls | grep -i 'gain\|agc'
+#     amixer -c 1 set 'Auto Gain Control' off
+#     amixer -c 1 set 'Mic' 60%          # then set a fixed capture level
+#     sudo alsactl store                 # persist across reboots
+#
+# AGC continuously re-normalises the level, which means the adaptive noise
+# floor in audio.noise_floor tracks a moving target and every threshold in
+# audio.detector — on_db_above_floor, off_db_above_floor, the classifier gate —
+# stops meaning anything. A quiet room slowly gets amplified until room tone
+# crosses the detection threshold; a real cry gets pulled back down toward the
+# floor. Most cheap USB microphones ship with AGC on.
+
+###############################################################################
+# 1. Shared capture — USB microphone (the common case)
+###############################################################################
+#
+# Most USB mics present 48 kHz S16_LE. The dsnoop slave must state the rate and
+# format the *hardware* actually runs at; the `plug` wrapper on top does the
+# conversion to whatever the application asks for (babymon wants 16 kHz mono,
+# which is YAMNet's native rate).
+
+pcm.babymon_dsnoop {
+    type dsnoop
+    # Any unique number. Every process that wants to share this stream must
+    # use the same one; they find each other through a SysV shared segment.
+    ipc_key 3141592
+    ipc_key_add_uid false
+    # 0660 + the audio group lets two processes attach even if they ever end up
+    # running as different users.
+    ipc_perm 0660
+    ipc_gid audio
+    slave {
+        pcm "hw:1,0"
+        channels 1
+        rate 48000
+        format S16_LE
+        # ~21 ms periods. Short enough that the detector reacts promptly,
+        # long enough that a busy Pi does not xrun.
+        period_size 1024
+        buffer_size 8192
+    }
+    bindings {
+        0 0
+    }
+}
+
+# The name to put in the config. `plug` handles rate/format/channel conversion,
+# so babymon can ask for 16 kHz mono S16_LE and get it.
+pcm.babymon_mic {
+    type plug
+    slave.pcm "babymon_dsnoop"
+}
+
+###############################################################################
+# 2. Shared capture — I2S MEMS microphone (SPH0645LM4H, ICS-43434, INMP441)
+###############################################################################
+#
+# Enable the overlay first, in /boot/firmware/config.txt:
+#
+#     dtoverlay=googlevoicehat-soundcard        # SPH0645 / Adafruit I2S breakout
+#     # or, for a bare I2S mic on the standard pins:
+#     dtoverlay=rpi-i2s-gpio                    # check your board's docs
+#
+# These parts are RIGID: 48 kHz, S32_LE, and usually stereo even when only one
+# channel is wired. dsnoop cannot resample or reformat, so the slave block must
+# state exactly that and the `plug` wrapper does all the work. Getting this
+# wrong gives "Invalid argument" from every client, not a warning.
+#
+# The audio is also very quiet — the useful signal sits in the top bits of a
+# 32-bit sample — so expect to set audio.gain_db to something like 20-30 dB.
+# Uncomment this block and comment out section 1 if you are using I2S.
+
+#pcm.babymon_i2s_dsnoop {
+#    type dsnoop
+#    ipc_key 3141593
+#    ipc_key_add_uid false
+#    ipc_perm 0660
+#    ipc_gid audio
+#    slave {
+#        pcm "hw:0,0"          # check `arecord -l` — the overlay's card
+#        channels 2            # these parts report stereo; only one is wired
+#        rate 48000            # fixed by the hardware, not negotiable
+#        format S32_LE         # likewise
+#        period_size 1024
+#        buffer_size 8192
+#    }
+#    bindings {
+#        0 0
+#        1 1
+#    }
+#}
+#
+# # Take the left channel only, then let plug convert to whatever is asked for.
+#pcm.babymon_i2s_mono {
+#    type route
+#    slave.pcm "babymon_i2s_dsnoop"
+#    slave.channels 2
+#    ttable.0.0 1
+#}
+#
+#pcm.babymon_mic {
+#    type plug
+#    slave.pcm "babymon_i2s_mono"
+#}
+
+###############################################################################
+# 3. Shared playback — only needed for two-way audio (talkback)
+###############################################################################
+#
+# `dmix` is the playback counterpart of dsnoop. Without it, ffmpeg holding the
+# speaker open for a talkback session blocks anything else that wants to make a
+# sound, and vice versa.
+
+pcm.babymon_dmix {
+    type dmix
+    ipc_key 3141594
+    ipc_key_add_uid false
+    ipc_perm 0660
+    ipc_gid audio
+    slave {
+        pcm "hw:0,0"          # your speaker / DAC / HAT — check `aplay -l`
+        channels 2
+        rate 48000
+        format S16_LE
+        period_size 1024
+        buffer_size 8192
+    }
+}
+
+pcm.babymon_speaker {
+    type plug
+    slave.pcm "babymon_dmix"
+}
+
+###############################################################################
+# 4. A `default` that does both directions
+###############################################################################
+#
+# Anything that opens "default" — including most ffmpeg command lines that
+# forget to name a device — gets the shared devices rather than the raw
+# hardware. This is what stops a stray `arecord` from locking out the detector.
+
+pcm.!default {
+    type asym
+    playback.pcm "babymon_speaker"
+    capture.pcm  "babymon_mic"
+}
+
+ctl.!default {
+    type hw
+    card 1                    # the card whose mixer controls you want by default
+}
+
+###############################################################################
+# 5. Wire it into babymon
+###############################################################################
+#
+# In /etc/babymon/babymon.yaml:
+#
+#     audio:
+#       device: "babymon_mic"
+#       sample_rate: 16000            # YAMNet's native rate; plug resamples
+#       channels: 1
+#       gain_db: 0.0                  # 20-30 for an I2S MEMS mic
+#
+#     homekit:
+#       audio:
+#         device: "babymon_mic"
+#         two_way: false
+#         playback_device: "babymon_speaker"
+#
+# Verify that two readers really can coexist, which is the whole point:
+#
+#     arecord -D babymon_mic -f S16_LE -r 16000 -c 1 -d 5 /tmp/a.wav &
+#     arecord -D babymon_mic -f S16_LE -r 16000 -c 1 -d 5 /tmp/b.wav
+#     # both must succeed; if the second says "Device or resource busy",
+#     # something is still opening the hardware directly.
+#
+# And check the level is sane — the detector wants room tone somewhere around
+# -60 to -50 dBFS, with headroom for a cry:
+#
+#     arecord -D babymon_mic -f S16_LE -r 16000 -c 1 -d 10 -V mono /dev/null

@@ -1,0 +1,106 @@
+[Unit]
+Description=babymon HomeKit accessory (HAP-NodeJS, HomeKit Secure Video)
+Documentation=file:///opt/babymon/docs/HOMEKIT.md
+
+# avahi-daemon is a hard ordering dependency, not a nicety. Raspberry Pi OS
+# runs avahi and it owns UDP 5353; homekit.advertiser is therefore set to
+# "avahi" so HAP-NodeJS registers its _hap._tcp record through the system
+# daemon instead of starting its own responder and fighting for the port.
+# If avahi is not up when the bridge starts, the accessory either never appears
+# in the Home app or appears and then vanishes.
+After=network-online.target avahi-daemon.service babymon-api.service babymon-mediamtx.service
+Wants=network-online.target babymon-mediamtx.service
+Requires=avahi-daemon.service
+# The bridge is a pure client of the Python API: every characteristic it
+# publishes is read from /api/homekit/state. It reconnects on its own, so this
+# is Wants rather than Requires — a restart of the API shows "No Response" in
+# the Home app for a few seconds and then recovers.
+Wants=babymon-api.service
+
+# Ten restarts in five minutes means it is not going to recover on its own.
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=exec
+User=babymon
+Group=babymon
+# audio: ffmpeg opens the microphone for live audio and for the HKSV audio
+# track. Use the dsnoop device from deploy/asound.conf.example so this does not
+# collide with the detector already holding the mic.
+SupplementaryGroups=audio
+
+WorkingDirectory=/opt/babymon/homekit
+EnvironmentFile=/etc/babymon/babymon.env
+EnvironmentFile=-/etc/babymon/babymon.local.env
+Environment=NODE_ENV=production
+
+# Give the API a moment to come up so the first characteristic read has real
+# values in it rather than nulls. Prefixed with '-' so a slow start is not a
+# failure — the bridge polls and recovers regardless.
+ExecStartPre=-/bin/sh -c 'for i in $(seq 1 30); do curl -sf -m 2 http://127.0.0.1:8080/api/health >/dev/null && exit 0; sleep 2; done'
+ExecStart=/usr/bin/node /opt/babymon/homekit/dist/index.js
+
+# HAP-NodeJS unpublishes the accessory and closes the HDS sessions on SIGTERM.
+# Killing it harder leaves the Home app showing the camera for a while.
+KillSignal=SIGTERM
+TimeoutStopSec=20
+
+Restart=always
+RestartSec=5
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=babymon-homekit
+
+# -- Resources --------------------------------------------------------------
+# Node plus the HKSV prebuffer ring (homekit.hksv.prebuffer_s of fragmented
+# MP4 held in memory) plus one or two ffmpeg children. NODE_OPTIONS in
+# babymon.env caps the V8 heap below this so a leak hits the JS heap limit —
+# which logs a stack trace — before it hits the cgroup, which does not.
+MemoryMax=512M
+MemoryHigh=384M
+CPUWeight=100
+TasksMax=96
+LimitNOFILE=8192
+
+# -- Sandboxing -------------------------------------------------------------
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+# HAP pairing state — the long-term keys for every paired iPhone. Losing this
+# directory means re-pairing and losing the HKSV history in the Home app.
+ReadWritePaths=/var/lib/babymon/hap
+RuntimeDirectory=babymon-homekit
+RuntimeDirectoryMode=0750
+
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+UMask=0027
+
+# NOT set: MemoryDenyWriteExecute would stop V8 from JIT-compiling, and
+# PrivateDevices would take away /dev/snd.
+
+# AF_NETLINK so Node can enumerate interfaces — HAP has to advertise a real
+# address. AF_UNIX for the avahi socket. The accessory has to be reachable from
+# the whole LAN, so there is no IPAddressAllow here.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+DevicePolicy=closed
+DeviceAllow=char-alsa rw
+
+[Install]
+WantedBy=multi-user.target

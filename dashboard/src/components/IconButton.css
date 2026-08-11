@@ -1,0 +1,61 @@
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  /* Never smaller than a thumb, whatever the icon inside measures. */
+  inline-size: var(--tap-target);
+  block-size: var(--tap-target);
+  border-radius: var(--radius-md);
+  border: var(--border-width) solid transparent;
+  color: var(--text-secondary);
+  background: transparent;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.icon-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.icon-btn:active:not(:disabled) {
+  background: var(--surface-active);
+}
+
+.icon-btn:disabled {
+  opacity: 0.45;
+}
+
+.icon-btn[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent-soft-fg);
+}
+
+.icon-btn--solid {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.icon-btn--danger {
+  color: var(--danger);
+}
+
+.icon-btn--danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger-soft-fg);
+}
+
+.icon-btn--sm {
+  inline-size: 2rem;
+  block-size: 2rem;
+  border-radius: var(--radius-sm);
+}
+
+.icon-btn--lg {
+  inline-size: 3.25rem;
+  block-size: 3.25rem;
+}

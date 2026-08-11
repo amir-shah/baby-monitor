@@ -1,0 +1,148 @@
+.meter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.meter__offline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* -- Reading -------------------------------------------------------------- */
+
+.meter__head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+}
+
+.meter__word {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text);
+}
+
+.meter__word--notice {
+  color: var(--warning);
+}
+
+.meter__word--alert {
+  color: var(--danger);
+}
+
+.meter__detail {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.meter__cry {
+  flex-basis: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--danger);
+}
+
+.meter__cry-score {
+  font-weight: var(--weight-normal);
+  color: var(--text-muted);
+}
+
+/* -- Bar ------------------------------------------------------------------ */
+
+.meter__bar {
+  position: relative;
+}
+
+.meter__track {
+  position: relative;
+  block-size: 1.25rem;
+  border-radius: var(--radius-full);
+  background: var(--surface-inset);
+  border: var(--border-width) solid var(--border-subtle);
+  overflow: clip;
+}
+
+.meter__fill {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  background: var(--chart-sound);
+  opacity: 0.55;
+  border-radius: var(--radius-full);
+  transition: inline-size var(--dur-base) var(--ease-out);
+}
+
+/* The stretch past the floor: hatched, not merely a different colour, so the
+   "this is the bit that matters" signal survives greyscale and colour
+   blindness. */
+.meter__excess {
+  position: absolute;
+  inset-block: 0;
+  background-color: var(--chart-sound);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgb(255 255 255 / 42%) 0 2px,
+    transparent 2px 5px
+  );
+  transition:
+    inline-size var(--dur-base) var(--ease-out),
+    inset-inline-start var(--dur-base) var(--ease-out);
+}
+
+.meter__floor {
+  position: absolute;
+  inset-block: -2px;
+  inline-size: 0;
+  transition: inset-inline-start var(--dur-base) var(--ease-out);
+}
+
+.meter__floor-tick {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: -1px;
+  inline-size: 2px;
+  background: var(--text);
+  border-radius: 1px;
+  /* A dark hairline on a dark fill needs its own separation. */
+  box-shadow: 0 0 0 1px var(--surface);
+}
+
+.meter__scale {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--space-1);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-wide);
+  color: var(--text-subtle);
+  min-block-size: 1em;
+}
+
+.meter__floor-label {
+  position: absolute;
+  translate: -50% 0;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-weight: var(--weight-medium);
+}
+
+@media (forced-colors: active) {
+  .meter__fill,
+  .meter__excess {
+    background: Highlight;
+  }
+
+  .meter__floor-tick {
+    background: CanvasText;
+  }
+}

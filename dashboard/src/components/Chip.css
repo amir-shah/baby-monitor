@@ -1,0 +1,119 @@
+.chip-wrap {
+  display: inline-flex;
+  align-items: center;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 100%;
+  padding: 0.3em 0.75em;
+  border-radius: var(--radius-full);
+  border: var(--border-width) solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  line-height: 1.5;
+  text-align: left;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+button.chip {
+  /* Comfortably tappable without making a row of filters enormous. */
+  min-height: 2.25rem;
+  cursor: pointer;
+}
+
+button.chip:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+button.chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.chip.is-selected {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-soft-fg);
+}
+
+.chip__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip__value {
+  padding-left: var(--space-2);
+  border-left: var(--border-width) solid var(--border);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.chip.is-selected .chip__value {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  color: inherit;
+}
+
+.chip__icon,
+.chip__check {
+  display: inline-flex;
+  flex: 0 0 auto;
+  line-height: 1;
+}
+
+.chip__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  margin-left: calc(var(--space-2) * -1);
+  border-radius: var(--radius-full);
+  color: var(--text-muted);
+}
+
+.chip__remove:hover {
+  background: var(--surface-active);
+  color: var(--text);
+}
+
+.chip__remove--inline {
+  margin-left: var(--space-1);
+  margin-right: calc(var(--space-2) * -1);
+  inline-size: 1.35rem;
+  block-size: 1.35rem;
+}
+
+/* A row of chips scrolls sideways inside itself rather than wrapping into a
+   tall block on a phone. */
+.chip-row {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding-bottom: var(--space-1);
+  scrollbar-width: none;
+}
+
+.chip-row::-webkit-scrollbar {
+  display: none;
+}
+
+.chip-row > * {
+  flex: 0 0 auto;
+}
+
+.chip-wrap-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}

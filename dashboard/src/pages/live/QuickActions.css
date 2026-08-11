@@ -1,0 +1,39 @@
+.quick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.quick__tags {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  /* The chip row scrolls sideways inside the card; let it bleed to the card
+     edges so a half-visible chip is a legible hint that there are more. */
+  margin-inline: calc(var(--space-4) * -1);
+}
+
+.quick__heading,
+.quick__hint {
+  padding-inline: var(--space-4);
+}
+
+.quick__heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-muted);
+}
+
+.quick__hint {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.quick .chip-row {
+  padding-inline: var(--space-4);
+  /* Scroll padding so a keyboard-focused chip is never flush to the edge. */
+  scroll-padding-inline: var(--space-4);
+}

@@ -1,0 +1,89 @@
+.events-strip {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.event-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-top: var(--border-width) solid var(--border-subtle);
+}
+
+.event-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+/* The play column keeps its width whether or not there is a clip, so the
+   times stay in a straight line down the list. */
+.event-row__play {
+  flex: 0 0 auto;
+  inline-size: 2.25rem;
+  min-block-size: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.event-row__body {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-block: var(--space-1);
+}
+
+.event-row__line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+
+.event-row__time {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  flex: 0 0 auto;
+}
+
+.event-row__label {
+  font-weight: var(--weight-medium);
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-inline-size: 0;
+}
+
+.event-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.event-row__meta:empty {
+  display: none;
+}
+
+.event-row__clip {
+  color: var(--text-subtle);
+}
+
+/* A false positive stays visible — it is part of the record — but reads as
+   struck out rather than merely faded, so it is not mistaken for low contrast. */
+.event-row.is-dismissed .event-row__label {
+  text-decoration: line-through;
+  color: var(--text-muted);
+  font-weight: var(--weight-normal);
+}

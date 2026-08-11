@@ -1,0 +1,194 @@
+# MediaMTX configuration for babymon.
+#
+# WHY THIS EXISTS AT ALL
+#
+# A CSI camera can be opened exactly once. The moment two processes want it —
+# the HomeKit bridge for live video and HKSV, and the Python analyser for
+# motion and snapshots — you need something in the middle. MediaMTX is a single
+# static Go binary with a native `rpiCamera` source, so it opens libcamera
+# itself and republishes over RTSP on the loopback. Everything else is a
+# client of 127.0.0.1:8554.
+#
+# That buys two things beyond sharing:
+#
+#   * ONE H.264 ENCODE. The Pi 4 hardware encoder has a total budget of about
+#     1080p30 across all streams combined. Encoding once here and letting both
+#     the live stream and the HKSV recording *copy* those packets keeps us
+#     inside it. The failure mode to avoid is two independent encodes (say
+#     1080p30 for HKSV plus a 720p re-encode for live), which will not fit.
+#
+#   * FAULT ISOLATION. A crash in the Python analysis cannot take the camera
+#     down with it. systemd restarts babymon-api; the video never stopped.
+#
+# The second path below uses `rpiCameraSecondary`, which is libcamera's
+# dual-stream capability: a second, low-resolution MJPEG stream off the SAME
+# camera open. That is what the motion analyser and the dashboard snapshot
+# endpoint read, so neither has to decode 720p H.264 continuously.
+#
+# Requires MediaMTX >= v1.10.0 (rpiCameraSecondary). Option names in the
+# rpiCamera family have changed between major versions; if the service refuses
+# to start with "unknown parameter", check your version's mediamtx.yml sample.
+
+###############################################################################
+# Global
+###############################################################################
+
+logLevel: info
+# journald timestamps every line already.
+logDestinations: [stdout]
+
+readTimeout: 10s
+writeTimeout: 10s
+# Queue depth per reader. HKSV pulls in bursts around a fragment boundary, and
+# a queue that is too shallow shows up as dropped frames in the recording.
+writeQueueSize: 1024
+udpMaxPayloadSize: 1472
+
+# Loopback only. There is no authentication configured below because nothing
+# outside the Pi can reach these ports; if you ever bind to 0.0.0.0, add
+# authInternalUsers first.
+api: yes
+apiAddress: 127.0.0.1:9997
+
+metrics: no
+pprof: no
+playback: no
+
+###############################################################################
+# Protocols
+###############################################################################
+
+rtsp: yes
+rtspAddress: 127.0.0.1:8554
+# TCP only. UDP over loopback gains nothing and every client here (ffmpeg in
+# the bridge, ffmpeg/OpenCV in the analyser) is happier with interleaved TCP.
+rtspTransports: [tcp]
+rtspAuthMethods: [basic]
+
+# Everything else off: fewer listeners, fewer ways to be wrong.
+rtmp: no
+hls: no
+webrtc: no
+srt: no
+
+###############################################################################
+# Paths
+###############################################################################
+
+pathDefaults:
+  # Do not hold the camera open when nobody is watching... except we do, see
+  # the per-path override below.
+  sourceOnDemand: no
+  record: no
+
+paths:
+
+  # -------------------------------------------------------------------------
+  # babymon — the primary H.264 stream.
+  #
+  # Consumed by: the HomeKit bridge (live streaming AND HomeKit Secure Video,
+  # both by copying these packets rather than re-encoding them).
+  # -------------------------------------------------------------------------
+  babymon:
+    source: rpiCamera
+    rpiCameraCamID: 0
+
+    # 720p15 is the shipped default and it matches config/babymon.yaml
+    # (camera.width/height/fps and homekit.video.max_*). It is one cheap
+    # hardware encode that serves live and HKSV simultaneously, and it keeps
+    # HKSV clips small in iCloud.
+    #
+    # For 1080p30 instead: set 1920/1080/30 here, rpiCameraIDRPeriod to 120,
+    # homekit.hksv.max_* and homekit.video.max_* to match, and accept that this
+    # consumes essentially the whole Pi 4 encoder budget. Do NOT then also ask
+    # the bridge to re-encode a separate live stream — leave copy_video on.
+    rpiCameraWidth: 1280
+    rpiCameraHeight: 720
+    rpiCameraFPS: 15
+    rpiCameraCodec: hardwareH264
+    rpiCameraBitrate: 1500000
+    # HomeKit's live stream negotiates Baseline or Main; High is refused by
+    # some Apple TV models acting as the HKSV recorder. Main is the safe pick.
+    rpiCameraProfile: main
+    rpiCameraLevel: '4.0'
+
+    # KEYFRAME INTERVAL — this is the number that must line up with HomeKit.
+    #
+    # Every HKSV fragment must begin with an IDR frame. homekit.hksv.fragment_ms
+    # is 4000 ms, so at 15 fps that is one IDR every 60 frames. If this does not
+    # divide the fragment length the recorder either stalls waiting for a
+    # keyframe or emits fragments longer than the negotiated maximum, which
+    # HomeKit drops. Change one, change the other.
+    #     fragment_ms / 1000 * fps = rpiCameraIDRPeriod
+    rpiCameraIDRPeriod: 60
+
+    # -- Optics --------------------------------------------------------------
+
+    # Camera Module 3 NoIR. Without the NoIR tuning file libcamera applies the
+    # IR-cut colour matrices and the night image comes out pink and noisy.
+    # Pi 4 and earlier (VC4 pipeline) is the path below; on a Pi 5 the same
+    # file lives under .../ipa/rpi/pisp/imx708_noir.json.
+    rpiCameraTuningFile: /usr/share/libcamera/ipa/rpi/vc4/imx708_noir.json
+
+    # AUTOFOCUS PINNED. Under flat IR illumination there is almost no contrast
+    # for phase-detect AF to lock onto, so it hunts — and every hunt is a
+    # whole-frame change that the motion detector reads as the child moving.
+    # Manual focus is not a compromise here; it is strictly better.
+    # LensPosition is in dioptres (1/metres): 0.5 ≈ 2 m, 1.0 ≈ 1 m.
+    rpiCameraAfMode: manual
+    rpiCameraLensPosition: 0.5
+
+    # EXPOSURE CEILING. Left to itself, auto-exposure in a dark nursery will
+    # happily choose a 200 ms exposure. libcamera then lowers the frame
+    # duration to fit it and the "15 fps" stream silently becomes 5 fps of
+    # motion-blurred frames — which destroys both the video and the motion
+    # signal, without anything ever logging an error.
+    #
+    # mediamtx derives FrameDurationLimits from rpiCameraFPS above, which is
+    # the primary guard. Pinning the shutter is the belt-and-braces version:
+    # 33000 µs = 1/30 s, comfortably inside a 15 fps frame period.
+    #
+    # If the picture is too dark with this set, the answer is more infrared or
+    # more gain (rpiCameraGain), NOT a longer shutter. 0 restores auto.
+    rpiCameraShutter: 33000
+    rpiCameraGain: 0
+    rpiCameraEV: 0
+    rpiCameraMetering: centre
+    rpiCameraAWB: auto
+    # Denoise costs latency and smears the low-contrast IR detail the motion
+    # detector is looking at. cdn_off keeps the colour denoise out of the way.
+    rpiCameraDenoise: cdn_off
+
+    rpiCameraHFlip: false
+    rpiCameraVFlip: false
+
+    # Keep the camera running even with no readers. The prebuffer in the
+    # HomeKit bridge needs a continuously flowing stream — an on-demand source
+    # would start ~2 s after the motion that was supposed to be pre-rolled.
+    sourceOnDemand: no
+
+  # -------------------------------------------------------------------------
+  # babymon-lores — the cheap analysis stream.
+  #
+  # `rpiCameraSecondary: yes` attaches a second libcamera stream to the SAME
+  # camera open as `babymon` above, so this costs a scaler pass and an MJPEG
+  # encode, not a second camera. MediaMTX only supports MJPEG for the secondary
+  # stream, which is fine: decoding 640x480 MJPEG at 5 fps is nearly free,
+  # every frame is a keyframe (so a snapshot never waits for one), and there is
+  # no inter-frame prediction to confuse a frame-difference motion detector.
+  #
+  # Consumed by: babymon-api (motion analysis, /api/snapshot.jpg,
+  # /api/stream/mjpeg).
+  # -------------------------------------------------------------------------
+  babymon-lores:
+    source: rpiCamera
+    rpiCameraSecondary: yes
+    rpiCameraCamID: 0
+    rpiCameraWidth: 640
+    rpiCameraHeight: 480
+    # 5 fps is plenty for motion scoring at the 15 s sample interval and for
+    # dashboard snapshots, and it leaves the CPU alone.
+    rpiCameraFPS: 5
+    rpiCameraCodec: mjpeg
+    rpiCameraJPEGQuality: 60
+    sourceOnDemand: no
