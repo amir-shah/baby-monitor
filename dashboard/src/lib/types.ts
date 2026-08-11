@@ -846,6 +846,16 @@ export interface FactorResult {
   unit?: string | null;
 
   p_value: number | null;
+  /** The null the p-value came from — not always the one requested. */
+  test_method?: string | null;
+  /**
+   * The smallest p-value that null could have produced. A tag on a fixed
+   * weekly cycle has only seven distinct rotations, so its p-value cannot go
+   * below about 0.14 however large the real effect.
+   */
+  p_floor?: number | null;
+  /** Decimals this metric needs to stay legible; 0.04 of a ratio is not 0. */
+  decimals?: number;
   /** Benjamini-Hochberg adjusted p-value. */
   q_value: number | null;
   significant: boolean;
@@ -867,8 +877,14 @@ export interface FactorMethod {
   iterations: number;
   correction: string;
   alpha: number;
-  /** `analytics.permutation_mode` */
+  /** `analytics.permutation_mode` — what was *requested*. */
   permutation_mode?: 'circular_shift' | 'shuffle';
+  /**
+   * Present when some tags fell back to a weaker null than the one requested,
+   * explaining which guarantee those p-values do not carry. `test` above
+   * always names the null that actually ran.
+   */
+  downgraded?: string;
   shrinkage?: boolean;
   seed?: number;
 }

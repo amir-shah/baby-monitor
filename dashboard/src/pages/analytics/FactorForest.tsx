@@ -43,6 +43,7 @@ import {
   buildWaitingRows,
   coverageNote,
   forestDomain,
+  methodNote,
   multiplicityNote,
 } from './factorModel';
 import type { EvidenceTier, FactorRow, WaitingRow } from './factorModel';
@@ -132,6 +133,7 @@ export function FactorForest({
           correlations={built.correlations}
           bestTier={built.bestTier}
           multiplicity={multiplicityNote(data, fdrQ)}
+          downgrade={methodNote(data)}
           disclaimer={data?.disclaimer ?? null}
           waiting={waiting}
           minN={minN}
@@ -151,6 +153,7 @@ interface ForestBodyProps {
   correlations: FactorRow[];
   bestTier: EvidenceTier | null;
   multiplicity: string | null;
+  downgrade: string | null;
   disclaimer: string | null;
   waiting: WaitingRow[];
   minN: number;
@@ -162,6 +165,7 @@ function ForestBody({
   correlations,
   bestTier,
   multiplicity,
+  downgrade,
   disclaimer,
   waiting,
   minN,
@@ -173,6 +177,7 @@ function ForestBody({
   return (
     <div className="forest" ref={plotRef}>
       {multiplicity ? <p className="forest__multiplicity">{multiplicity}</p> : null}
+      {downgrade ? <p className="forest__downgrade">{downgrade}</p> : null}
 
       {hasRows ? <TierLegend /> : null}
 

@@ -31,6 +31,7 @@ from dataclasses import dataclass, field
 from math import erf, erfc, exp, fabs, lgamma, log, sqrt
 
 __all__ = [
+    "MIN_ROTATIONS",
     "Z_95",
     "EffectSize",
     "TestResult",
@@ -45,6 +46,7 @@ __all__ = [
     "iqr",
     "mann_whitney_u",
     "mean",
+    "mean_difference_ci",
     "median",
     "norm_cdf",
     "norm_ppf",
@@ -57,6 +59,7 @@ __all__ = [
     "sleep_regularity_index",
     "spearman",
     "stdev",
+    "student_t_ppf",
     "student_t_sf",
     "theil_sen",
     "variance",
@@ -65,6 +68,11 @@ __all__ = [
 
 #: Two-sided 95% normal quantile.
 Z_95 = 1.959963984540054
+
+#: Fewest distinct rotations that make a circular-shift null worth running. A
+#: tag repeating on a fixed weekly cycle has only seven of them, which puts a
+#: floor of about 0.14 under its p-value however large the real effect is.
+MIN_ROTATIONS = 20
 
 
 # ---------------------------------------------------------------------------
@@ -346,6 +354,65 @@ def welch_t_test(a: Sequence[float], b: Sequence[float]) -> TestResult:
     return TestResult(t, min(1.0, 2.0 * student_t_sf(abs(t), df)), df, "welch")
 
 
+def mean_difference_ci(
+    a: Sequence[float], b: Sequence[float], *, confidence: float = 0.95
+) -> tuple[float | None, float | None]:
+    """Welch interval for ``mean(a) - mean(b)``, in the units of the data.
+
+    This is the interval on the headline number — "18 minutes less sleep" —
+    and it is the one a reader leans on hardest, so its stated coverage has to
+    be close to true. Measured against simulated nights (skewed, capped, a
+    handful of disasters, groups of 8 v 22 and 12 v 38) the alternatives came
+    out at: percentile bootstrap 89%, BCa 86%, studentised bootstrap 90%,
+    Welch 93%. All of them are labelled 95%; Welch is the least wrong, and it
+    is also the interval that agrees with the Welch test elsewhere in this
+    module rather than quietly using a different model of the same data.
+
+    93% is still not 95%, and ``docs/ANALYTICS.md`` says so. The residual gap
+    is the price of estimating two variances from a handful of nights, and no
+    amount of resampling buys it back.
+    """
+    n1, n2 = len(a), len(b)
+    if n1 < 2 or n2 < 2:
+        return None, None
+    v1, v2 = variance(a) / n1, variance(b) / n2
+    se_squared = v1 + v2
+    if se_squared <= 0:
+        return None, None
+    denominator = v1 * v1 / (n1 - 1) + v2 * v2 / (n2 - 1)
+    df = se_squared**2 / denominator if denominator > 0 else float(n1 + n2 - 2)
+    critical = student_t_ppf(1.0 - (1.0 - confidence) / 2.0, df)
+    if critical is None:
+        return None, None
+    half_width = critical * sqrt(se_squared)
+    difference = mean(a) - mean(b)
+    return difference - half_width, difference + half_width
+
+
+def student_t_ppf(p: float, df: float) -> float | None:
+    """Inverse of the Student-t CDF, by bisection on :func:`student_t_sf`.
+
+    Bisection rather than a closed form because there is not one, and because
+    a hundred halvings of a bracket cost nothing next to the bootstrap this
+    replaces.
+    """
+    if not 0.0 < p < 1.0 or df <= 0:
+        return None
+    target = 1.0 - p
+    low, high = 0.0, 1.0
+    while student_t_sf(high, df) > target:
+        high *= 2.0
+        if high > 1e6:
+            return None
+    for _ in range(200):
+        middle = (low + high) / 2.0
+        if student_t_sf(middle, df) > target:
+            low = middle
+        else:
+            high = middle
+    return (low + high) / 2.0
+
+
 def mann_whitney_u(
     a: Sequence[float], b: Sequence[float], *, continuity: bool = True
 ) -> TestResult:
@@ -511,6 +578,20 @@ def permutation_test(
         so the p-value cannot resolve below about ``1/n`` — the code falls back
         to shuffling when there are too few nights for rotation to say anything.
 
+        A periodic tag is the trap here. "Pizza on Fridays" repeats every seven
+        nights, so rotating by 7, 14, 21 … reproduces the original labelling
+        exactly: those rotations are not null draws, they are the observed data
+        again, and every one of them counts as extreme. Left alone, a weekly
+        habit can never score better than about p=0.14 no matter how large its
+        effect. Only *distinct* rotations are used, and the count of them is
+        reported so the caller can say the floor out loud instead of
+        presenting a structural artefact as a null result.
+
+    The mode actually used is always what comes back in ``method``, which is
+    not always the mode asked for. Reporting the requested one would tell a
+    reader their results were protected against day-to-day carryover when they
+    were not.
+
     The ``(1 + count) / (1 + iterations)`` form is deliberate: a permutation
     p-value of exactly zero is never a valid estimate (Phipson & Smyth 2010).
     """
@@ -537,30 +618,52 @@ def permutation_test(
         if n < 30:
             effective_mode = "shuffle"
         else:
+            original = tuple(label_list)
+            seen: set[tuple[bool, ...]] = {original}
             offsets = list(range(1, n))
             rng.shuffle(offsets)
             if len(offsets) > iterations:
                 offsets = offsets[:iterations]
+            usable = 0
             for offset in offsets:
-                rotated = label_list[offset:] + label_list[:offset]
+                rotated = tuple(label_list[offset:] + label_list[:offset])
+                if rotated in seen:
+                    # A rotation of a periodic tag onto itself. Not a draw
+                    # from the null — it is the observed data wearing a hat.
+                    continue
+                seen.add(rotated)
                 a = [v for v, flag in zip(values, rotated, strict=True) if flag]
                 b = [v for v, flag in zip(values, rotated, strict=True) if not flag]
                 if len(a) < 2 or len(b) < 2:
                     continue
+                usable += 1
                 candidate = statistic(a, b)
                 if math.isfinite(candidate) and abs(candidate) >= abs(observed) - 1e-12:
                     extreme += 1
-            total = len(offsets)
-            return TestResult(
-                observed,
-                (1 + extreme) / (1 + total),
-                None,
-                "permutation:circular_shift",
-                {"iterations": float(total)},
-            )
+            if usable < MIN_ROTATIONS:
+                # Too regular to test this way at all: a tag applied on a fixed
+                # weekday, or on every night bar two. Shuffling ignores the
+                # autocorrelation, which is why it is not the default, but a
+                # coarse honest answer beats a fine dishonest one, and the mode
+                # that comes back says which was used.
+                effective_mode = "shuffle"
+            else:
+                return TestResult(
+                    observed,
+                    (1 + extreme) / (1 + usable),
+                    None,
+                    "permutation:circular_shift",
+                    {
+                        "iterations": float(usable),
+                        # The smallest p-value this null can produce. A weekly
+                        # tag bottoms out around 0.14 however real its effect.
+                        "resolution": 1.0 / (1 + usable),
+                    },
+                )
 
     pool = list(values)
     n1 = len(group_a)
+    extreme = 0  # anything the abandoned rotation pass counted does not carry over
     for _ in range(iterations):
         rng.shuffle(pool)
         candidate = statistic(pool[:n1], pool[n1:])
@@ -584,16 +687,32 @@ def bootstrap_ci(
     confidence: float = 0.95,
     seed: int | None = None,
 ) -> tuple[float | None, float | None]:
-    """Percentile bootstrap interval for a two-sample statistic.
+    """Bias-corrected and accelerated (BCa) bootstrap interval.
 
     Preferred over the analytic interval below about thirty per group, where
     the closed forms are slightly anti-conservative, and the only option at all
     for statistics like Cliff's delta on skewed data.
+
+    ``z0`` measures the median bias of the bootstrap distribution and ``acc``
+    its skew, estimated by jackknife; together they shift and stretch the
+    percentiles taken from the replicates. Where the correction cannot be
+    computed — every replicate identical, a degenerate jackknife — it falls
+    back to the plain percentiles rather than inventing an adjustment. Agrees
+    with ``scipy.stats.bootstrap(method="BCa")`` to within resampling noise,
+    which ``tests/test_stats_vs_scipy.py`` checks.
+
+    Not used for the headline difference in means: at the group sizes this
+    project actually sees, BCa measured *worse* than the plain percentile
+    interval and both were beaten by :func:`mean_difference_ci`, which has the
+    closed form this statistic deserves. Asymptotic second-order accuracy is
+    not a coverage guarantee at n=8, and the numbers in that docstring are
+    measured rather than assumed.
     """
     if len(a) < 2 or len(b) < 2:
         return None, None
     rng = random.Random(seed)
     n1, n2 = len(a), len(b)
+    observed = statistic(a, b)
     samples: list[float] = []
     for _ in range(iterations):
         resample_a = [a[rng.randrange(n1)] for _ in range(n1)]
@@ -603,8 +722,75 @@ def bootstrap_ci(
             samples.append(value)
     if len(samples) < 20:
         return None, None
+
     alpha = (1.0 - confidence) / 2.0
-    return percentile(samples, alpha * 100), percentile(samples, (1 - alpha) * 100)
+    low_q, high_q = alpha, 1.0 - alpha
+    if math.isfinite(observed):
+        adjusted = _bca_quantiles(observed, samples, a, b, statistic, alpha)
+        if adjusted is not None:
+            low_q, high_q = adjusted
+    return percentile(samples, low_q * 100), percentile(samples, high_q * 100)
+
+
+def _bca_quantiles(
+    observed: float,
+    samples: Sequence[float],
+    a: Sequence[float],
+    b: Sequence[float],
+    statistic: Callable[[Sequence[float], Sequence[float]], float],
+    alpha: float,
+) -> tuple[float, float] | None:
+    """The two BCa-adjusted quantiles, or None if the correction is degenerate."""
+    below = sum(1 for value in samples if value < observed)
+    ties = sum(1 for value in samples if value == observed)
+    # The mid-p proportion, so a discrete statistic with many ties does not
+    # push z0 to an extreme on the strength of the ties alone.
+    proportion = (below + 0.5 * ties) / len(samples)
+    if not 0.0 < proportion < 1.0:
+        return None
+    z0 = norm_ppf(proportion)
+
+    # Empirical influence values, group by group. They cannot be pooled raw:
+    # dropping one night from a group of eight moves the statistic far more
+    # than dropping one from a group of twenty-two, and treating those as
+    # comparable makes the smaller group look wildly skewed. Each group is
+    # centred within itself, scaled by its own size, and its cubes and squares
+    # normalised by that size before the two groups are combined — the
+    # multi-sample acceleration of Efron & Tibshirani §14.3, and the form
+    # scipy's own BCa uses, which the differential test pins this against.
+    numerator = 0.0
+    denominator = 0.0
+    for group, other, first in ((a, b, True), (b, a, False)):
+        size = len(group)
+        if size < 2:
+            return None
+        deletions: list[float] = []
+        for i in range(size):
+            trimmed = [*group[:i], *group[i + 1 :]]
+            value = statistic(trimmed, other) if first else statistic(other, trimmed)
+            if not math.isfinite(value):
+                return None
+            deletions.append(value)
+        centre = mean(deletions)
+        influence = [(size - 1) * (centre - value) for value in deletions]
+        numerator += sum(d**3 for d in influence) / size**3
+        denominator += sum(d * d for d in influence) / size**2
+
+    if denominator <= 0.0:
+        return None
+    acc = numerator / (6.0 * denominator**1.5)
+
+    def adjust(probability: float) -> float | None:
+        z = norm_ppf(probability)
+        denominator = 1.0 - acc * (z0 + z)
+        if abs(denominator) < 1e-12:
+            return None
+        return norm_cdf(z0 + (z0 + z) / denominator)
+
+    low, high = adjust(alpha), adjust(1.0 - alpha)
+    if low is None or high is None or not 0.0 < low < high < 1.0:
+        return None
+    return low, high
 
 
 # ---------------------------------------------------------------------------

@@ -595,6 +595,21 @@ export function multiplicityNote(
   return `${subject}; adjusted with ${correction} at a ${rate}% false discovery rate.`;
 }
 
+/**
+ * "Some tags were tested with a weaker null." — shown when it happened.
+ *
+ * The circular-shift null is the reason these results are not riddled with
+ * false positives from one night's sleep resembling the next, and it
+ * downgrades itself to free shuffling when the record is short or a tag too
+ * regular to rotate. A reader told the guardrail was on when it was off would
+ * trust exactly the wrong numbers hardest, so the API reports what actually
+ * ran and this surfaces it.
+ */
+export function methodNote(response: FactorsResponse | undefined): string | null {
+  const downgraded = response?.method?.downgraded;
+  return typeof downgraded === 'string' && downgraded.length > 0 ? downgraded : null;
+}
+
 function correctionName(raw: string | undefined | null): string | null {
   if (!raw) return null;
   const key = raw.toLowerCase().replace(/[\s_]+/g, '-');

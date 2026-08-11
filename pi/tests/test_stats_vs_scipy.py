@@ -114,3 +114,51 @@ def test_cliffs_delta_equals_the_rank_identity(rng):
         b = [rng.gauss(0.5, 1) for _ in range(rng.randint(5, 30))]
         u = scipy_stats.mannwhitneyu(a, b).statistic
         assert S.cliffs_delta(a, b) == pytest.approx(2 * u / (len(a) * len(b)) - 1)
+
+
+def test_student_t_ppf_inverts_scipy(rng):
+    worst = 0.0
+    for _ in range(300):
+        df = rng.uniform(1.5, 200.0)
+        p = rng.uniform(0.5001, 0.9999)
+        ours = S.student_t_ppf(p, df)
+        theirs = scipy_stats.t.ppf(p, df)
+        worst = max(worst, abs(ours - theirs))
+    assert worst < 1e-6, worst
+
+
+def test_mean_difference_ci_matches_the_welch_interval(rng):
+    """The interval on the headline number, against scipy's own."""
+    worst = 0.0
+    for _ in range(200):
+        a = [rng.gauss(600, rng.uniform(10, 60)) for _ in range(rng.randint(4, 40))]
+        b = [rng.gauss(620, rng.uniform(10, 60)) for _ in range(rng.randint(4, 40))]
+        low, high = S.mean_difference_ci(a, b)
+        theirs = scipy_stats.ttest_ind(a, b, equal_var=False).confidence_interval(0.95)
+        worst = max(worst, abs(low - theirs.low), abs(high - theirs.high))
+    assert worst < 1e-6, worst
+
+
+def test_bootstrap_ci_matches_scipys_bca(rng):
+    """BCa is fiddly enough that only a reference implementation settles it.
+
+    Both sides resample, so they agree to Monte-Carlo noise rather than to
+    machine precision; the tolerance is scaled to the interval's own width.
+    """
+    numpy = pytest.importorskip("numpy")
+    for trial in range(6):
+        a = [rng.expovariate(1 / 50) + 500 for _ in range(rng.randint(8, 20))]
+        b = [rng.expovariate(1 / 50) + 520 for _ in range(rng.randint(8, 30))]
+        low, high = S.bootstrap_ci(
+            a, b, lambda x, y: S.mean(x) - S.mean(y), iterations=20000, seed=trial
+        )
+        theirs = scipy_stats.bootstrap(
+            (numpy.array(a), numpy.array(b)),
+            lambda x, y, axis=-1: x.mean(axis=axis) - y.mean(axis=axis),
+            n_resamples=20000,
+            method="BCa",
+            random_state=trial,
+        ).confidence_interval
+        tolerance = 0.06 * (high - low)
+        assert abs(low - theirs.low) < tolerance, (low, theirs.low)
+        assert abs(high - theirs.high) < tolerance, (high, theirs.high)

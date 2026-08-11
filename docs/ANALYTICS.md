@@ -445,14 +445,25 @@ tag and outcome, which is what a null needs to do, while preserving *both* the
 tag's own run structure and the outcome's autocorrelation. Most of the
 inflation goes away.
 
-Two honest limitations, both handled in the code:
+Three honest limitations, all handled in the code:
 
 - **There are only `n` distinct rotations.** The p-value cannot resolve finer
   than about `1/n`. With 60 nights, the smallest p you can observe is about
   0.016.
-- **Below 30 nights, rotation is too coarse to say anything**, so the
-  implementation silently falls back to free shuffling. `TestResult.method`
-  records which was actually used.
+- **A tag on a fixed weekly cycle has only seven.** "Pizza on Fridays"
+  reproduces its own labelling under every rotation by a multiple of 7, and
+  those rotations are not null draws — they are the observed data again, each
+  one counting as extreme. Left alone that puts a floor of about 0.14 under
+  the p-value however large the real effect. Only distinct rotations are used,
+  the count of them is reported as `p_floor`, and a factor whose floor exceeds
+  0.05 carries a caveat saying so in words.
+- **Below 30 nights, or with fewer than 20 distinct rotations, rotation cannot
+  provide a null**, so the implementation falls back to free shuffling. Not
+  silently: `TestResult.method` records which was actually used, each factor
+  reports its own `test_method`, and the analysis-level `method.test` lists
+  what ran rather than what was requested. When anything was downgraded,
+  `method.downgraded` says so — a reader told the autocorrelation guardrail
+  was on when it was off would trust the wrong numbers hardest.
 
 Every permutation p-value is computed as
 
@@ -521,9 +532,33 @@ misleading; delta only cares about ordering. Magnitude thresholds are Romano et
 al. (2006): <0.147 negligible, <0.33 small, <0.474 medium, else large.
 
 **The headline difference in natural units** ("11 minutes less sleep") is what
-people actually read, so *that* is what gets the confidence interval: a
-percentile bootstrap of the mean difference, `analytics.bootstrap_iterations`
-(5000) resamples of each group independently.
+people actually read, so *that* is what gets the confidence interval — and its
+stated coverage has to be close to true, because it is the part of the display
+a cautious reader leans on hardest.
+
+It is a **Welch interval**, not a bootstrap. Measured against simulated nights
+(skewed, capped, a handful of disasters, groups of 8 v 22 and 12 v 38), the
+candidates covered the truth at:
+
+| Method | Coverage | Mean width |
+|---|---|---|
+| Percentile bootstrap | 89% | 68 |
+| BCa bootstrap | 86% | 69 |
+| Studentised bootstrap | 90% | 88 |
+| **Welch t** | **93%** | 81 |
+
+All four are labelled 95%. Welch is the least wrong, it is deterministic, and
+it agrees with the Welch test elsewhere in this module rather than quietly
+using a different model of the same data. The textbook ordering says BCa
+should win; at these sample sizes it does not, which is why the numbers above
+are measured rather than assumed.
+
+93% is still not 95%. The residual gap is the price of estimating two
+variances from a handful of nights and no amount of resampling buys it back.
+
+`stats.bootstrap_ci` remains, now BCa (bias-corrected and accelerated, checked
+against `scipy.stats.bootstrap` in the differential test), as the fallback for
+the degenerate cases where a Welch interval cannot be formed at all.
 
 ### Shrinkage
 

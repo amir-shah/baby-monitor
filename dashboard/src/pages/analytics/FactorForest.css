@@ -40,6 +40,15 @@
   line-height: var(--leading-normal);
 }
 
+/* Warmer than the multiplicity note above it: this one says a guardrail was
+   not applied, which changes how much the numbers below can be trusted. */
+.forest__downgrade {
+  margin: 0;
+  color: var(--warning);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
 .forest__disclaimer {
   margin: 0;
   padding-top: var(--space-3);

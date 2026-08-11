@@ -73,6 +73,19 @@ METRIC_UNITS: dict[str, str] = {
     "temp_c_mean": "°C", "humidity_mean": "%",
 }
 
+#: Decimals to keep for each metric, in the API payload and in the sentence.
+#:
+#: One decimal is right for minutes and points, and destroys the two metrics
+#: that live on 0..1. Sleep efficiency moving from 0.91 to 0.87 is four
+#: percentage points — around forty minutes of a child's night — and rounded
+#: to one decimal it prints as "0 less (95% CI -0 to -0)", which reads as no
+#: effect at all rather than the largest one in the table.
+METRIC_DECIMALS: dict[str, int] = {
+    "sleep_efficiency": 3,
+    "motion_index": 3,
+}
+DEFAULT_DECIMALS = 1
+
 
 class EvidenceTier:
     """How much weight a result can carry, by sample size alone."""
@@ -115,10 +128,19 @@ class FactorResult:
     dose_response_n: int = 0
 
     p_value: float | None = None
+    #: The null the p-value actually came from, which is not always the one
+    #: that was asked for — see ``stats.permutation_test``.
+    test_method: str | None = None
+    #: The smallest p-value that null could have produced, where it is bounded
+    #: away from zero by the tag's own regularity.
+    p_floor: float | None = None
     q_value: float | None = None
     significant: bool = False
     tier: str = EvidenceTier.INSUFFICIENT
     verdict: str = "inconclusive"
+
+    #: Decimals this metric needs to be legible. See METRIC_DECIMALS.
+    decimals: int = DEFAULT_DECIMALS
 
     confounders: list[dict[str, Any]] = field(default_factory=list)
     caveats: list[str] = field(default_factory=list)
@@ -137,13 +159,17 @@ class FactorResult:
             "n": self.n,
             "n_with": self.n_with,
             "n_without": self.n_without,
-            "mean_with": _round(self.mean_with),
-            "mean_without": _round(self.mean_without),
-            "median_with": _round(self.median_with),
-            "median_without": _round(self.median_without),
-            "diff": _round(self.diff),
-            "diff_ci95": [_round(self.diff_ci95[0]), _round(self.diff_ci95[1])],
+            "mean_with": _round(self.mean_with, self.decimals),
+            "mean_without": _round(self.mean_without, self.decimals),
+            "median_with": _round(self.median_with, self.decimals),
+            "median_without": _round(self.median_without, self.decimals),
+            "diff": _round(self.diff, self.decimals),
+            "diff_ci95": [
+                _round(self.diff_ci95[0], self.decimals),
+                _round(self.diff_ci95[1], self.decimals),
+            ],
             "unit": self.unit,
+            "decimals": self.decimals,
             "effect_size": self.effect_size,
             "cliffs_delta": self.cliffs_delta,
             "shrunk_effect": _round(self.shrunk_effect, 3),
@@ -153,6 +179,8 @@ class FactorResult:
             "dose_response_p": _round(self.dose_response_p, 5),
             "dose_response_n": self.dose_response_n,
             "p_value": _round(self.p_value, 5),
+            "test_method": self.test_method,
+            "p_floor": _round(self.p_floor, 4),
             "q_value": _round(self.q_value, 5),
             "significant": self.significant,
             "tier": self.tier,
@@ -271,6 +299,7 @@ def analyse_factors(
 
     lower_better = metric in LOWER_IS_BETTER
     unit = METRIC_UNITS.get(metric, "")
+    decimals = METRIC_DECIMALS.get(metric, DEFAULT_DECIMALS)
     span = len(ordered_keys)
 
     results: list[FactorResult] = []
@@ -288,6 +317,7 @@ def analyse_factors(
             category=str(tag.category) if tag else "other",
             value_type=str(value_type),
             unit=unit,
+            decimals=decimals,
             n=len(usable),
         )
 
@@ -390,6 +420,22 @@ def analyse_factors(
     insufficient.sort(key=lambda r: (r.nights_needed, r.label))
 
     method["tests_run"] = len(results)
+    # What ran, not what was asked for. The circular-shift null is the reason
+    # these results are not riddled with false positives from day-to-day
+    # carryover, and it silently downgrades itself when a tag is too regular or
+    # the record too short for rotation to mean anything. A reader told the
+    # guardrail was on when it was off would trust the wrong numbers hardest.
+    used = sorted({r.test_method for r in results if r.test_method})
+    if used:
+        method["test"] = " / ".join(m.replace("permutation:", "") for m in used)
+        method["test"] = f"permutation ({method['test']})"
+    if any(m == "permutation:shuffle" for m in used) and permutation_mode != "shuffle":
+        method["downgraded"] = (
+            "Some tags fell back to free shuffling because there were too few "
+            "nights, or too regular a pattern, for rotation to provide a null. "
+            "Those p-values do not account for one night's sleep resembling the "
+            "next, and read as more certain than they are."
+        )
     return FactorAnalysis(
         metric=metric,
         metric_label=METRIC_LABELS.get(metric, metric),
@@ -435,15 +481,19 @@ def _compare_groups(
         "magnitude": delta.magnitude,
     }
 
-    # Bootstrap the difference in natural units — that is the number shown, so
-    # that is the number whose uncertainty the reader needs.
-    low, high = stats.bootstrap_ci(
-        group_with,
-        group_without,
-        lambda a, b: stats.mean(a) - stats.mean(b),
-        iterations=bootstrap_iterations,
-        seed=seed,
-    )
+    # The interval on the difference in natural units — that is the number
+    # shown, so that is the number whose uncertainty the reader needs. Welch
+    # rather than a bootstrap: see stats.mean_difference_ci for the measured
+    # coverage of each, which is not what the textbook ordering suggests.
+    low, high = stats.mean_difference_ci(group_with, group_without)
+    if low is None:
+        low, high = stats.bootstrap_ci(
+            group_with,
+            group_without,
+            lambda a, b: stats.mean(a) - stats.mean(b),
+            iterations=bootstrap_iterations,
+            seed=seed,
+        )
     result.diff_ci95 = (low, high)
 
     test = stats.permutation_test(
@@ -455,6 +505,17 @@ def _compare_groups(
         seed=seed,
     )
     result.p_value = test.p_value
+    result.test_method = test.method
+    floor = test.detail.get("resolution")
+    if floor is not None:
+        result.p_floor = floor
+        if floor > 0.05:
+            result.caveats.append(
+                "This tag follows too regular a pattern for the test to resolve a "
+                "small p-value: the best it could report for these nights is "
+                f"{floor:.2f}, however large the real effect. Vary when it happens "
+                "and the comparison becomes able to see it."
+            )
 
 
 def _correlate_continuous(
@@ -587,12 +648,21 @@ def _summarise(result: FactorResult, crosses_zero: bool) -> str:
     unit = f" {result.unit}".rstrip()
     direction = "more" if result.diff > 0 else "less"
     low, high = result.diff_ci95
+    # Enough places for the metric, and never so few that a real difference
+    # rounds away to nothing: a whole-number format on a 0..1 metric prints
+    # every finding it has as "0 less (95% CI -0 to -0)", which reads as no
+    # effect rather than the largest one in the table.
+    places = result.decimals
+    while magnitude > 0 and round(magnitude, places) == 0 and places < 6:
+        places += 1
     interval = (
-        f" (95% CI {low:+.0f} to {high:+.0f})" if low is not None and high is not None else ""
+        f" (95% CI {low:+.{places}f} to {high:+.{places}f})"
+        if low is not None and high is not None
+        else ""
     )
     sentence = (
         f"On nights with {result.label.lower()}, the figure was "
-        f"{magnitude:.0f}{unit} {direction}{interval}, across "
+        f"{magnitude:.{places}f}{unit} {direction}{interval}, across "
         f"{result.n_with} nights with and {result.n_without} without."
     )
     if crosses_zero:

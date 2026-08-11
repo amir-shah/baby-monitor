@@ -88,7 +88,9 @@ class TestPermutation:
 
     def test_circular_shift_is_used_when_there_is_enough_history(self):
         values = [float(i % 7) for i in range(120)]
-        labels = [i % 3 == 0 for i in range(120)]
+        # Irregular on purpose. A tag applied on a fixed cycle has only as many
+        # distinct rotations as its period, and is handled in TestPeriodicTags.
+        labels = [random.Random(i).random() < 0.4 for i in range(120)]
         result = S.permutation_test(
             values, labels, lambda a, b: S.mean(a) - S.mean(b),
             iterations=500, mode="circular_shift", seed=5,
@@ -119,6 +121,99 @@ class TestPermutation:
             iterations=2000, mode="circular_shift", seed=7,
         )
         assert rotated.p_value >= shuffled.p_value
+
+
+class TestPeriodicTags:
+    """A tag on a fixed weekly cycle breaks the circular-shift null.
+
+    Rotating "pizza on Fridays" by 7, 14, 21 … reproduces the observed
+    labelling exactly. Those rotations are not draws from the null; they are
+    the data again, and each one scores as extreme. Counted, they put a floor
+    of roughly 1/7 under the p-value no matter how large the real effect is,
+    and a real finding is reported as nothing.
+    """
+
+    @staticmethod
+    def weekly(nights: int = 140, effect: float = -60.0):
+        values, labels = [], []
+        for i in range(nights):
+            friday = i % 7 == 4
+            labels.append(friday)
+            values.append(600.0 + (effect if friday else 0.0))
+        return values, labels
+
+    def test_duplicate_rotations_are_not_counted_as_null_draws(self):
+        values, labels = self.weekly()
+        result = S.permutation_test(
+            values, labels, lambda a, b: S.mean(a) - S.mean(b),
+            iterations=2000, mode="circular_shift", seed=3,
+        )
+        # Seven distinct rotations, below MIN_ROTATIONS, so rotation is
+        # abandoned rather than reporting a floor as if it were a result.
+        assert result.method == "permutation:shuffle"
+
+    def test_a_huge_weekly_effect_is_no_longer_invisible(self):
+        values, labels = self.weekly()
+        result = S.permutation_test(
+            values, labels, lambda a, b: S.mean(a) - S.mean(b),
+            iterations=2000, mode="circular_shift", seed=3,
+        )
+        # An hour less sleep every Friday, in 140 nights. Under the old
+        # rotation null this could not score below about 0.14.
+        assert result.p_value < 0.01
+
+    def test_a_mostly_regular_tag_reports_the_floor_it_is_stuck_behind(self):
+        # Fortnightly-ish, with enough jitter to leave rotations distinct.
+        rng = random.Random(19)
+        values, labels = [], []
+        for i in range(160):
+            flag = (i + (i // 14)) % 5 == 0
+            labels.append(flag)
+            values.append(600.0 + (-40.0 if flag else 0.0) + rng.gauss(0, 8))
+        result = S.permutation_test(
+            values, labels, lambda a, b: S.mean(a) - S.mean(b),
+            iterations=2000, mode="circular_shift", seed=3,
+        )
+        if result.method == "permutation:circular_shift":
+            resolution = result.detail["resolution"]
+            assert resolution == pytest.approx(1.0 / (1 + result.detail["iterations"]))
+            assert result.p_value >= resolution
+
+    def test_the_reported_method_is_the_one_that_ran(self):
+        # Not the one requested. A reader told the autocorrelation guardrail
+        # was on when it was off would trust the wrong numbers hardest.
+        values, labels = self.weekly(nights=140)
+        rotated = S.permutation_test(
+            values, labels, lambda a, b: S.mean(a) - S.mean(b),
+            iterations=500, mode="circular_shift", seed=3,
+        )
+        assert rotated.method != "permutation:circular_shift"
+
+
+class TestMeanDifferenceInterval:
+    def test_it_brackets_the_difference_it_is_an_interval_for(self):
+        a = [600.0, 580.0, 620.0, 590.0, 610.0, 575.0]
+        b = [640.0, 660.0, 630.0, 650.0, 645.0, 655.0]
+        low, high = S.mean_difference_ci(a, b)
+        difference = S.mean(a) - S.mean(b)
+        assert low < difference < high
+
+    def test_more_nights_narrow_it(self):
+        rng = random.Random(5)
+        small = [rng.gauss(600, 30) for _ in range(6)]
+        against = [rng.gauss(620, 30) for _ in range(6)]
+        large = [rng.gauss(600, 30) for _ in range(60)]
+        against_large = [rng.gauss(620, 30) for _ in range(60)]
+        narrow = S.mean_difference_ci(large, against_large)
+        wide = S.mean_difference_ci(small, against)
+        assert (narrow[1] - narrow[0]) < (wide[1] - wide[0])
+
+    def test_it_declines_rather_than_guessing_on_a_single_night(self):
+        assert S.mean_difference_ci([600.0], [620.0, 610.0]) == (None, None)
+
+    def test_identical_groups_give_a_zero_width_interval_or_none(self):
+        low, high = S.mean_difference_ci([600.0] * 5, [600.0] * 5)
+        assert (low, high) == (None, None)
 
 
 class TestShrinkage:
