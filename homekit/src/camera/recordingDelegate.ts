@@ -386,6 +386,13 @@ export class BabymonRecordingDelegate implements CameraRecordingDelegate {
       "-i", inputUrl,
     ];
 
+    // The pre-roll is the whole reason HKSV clips are useful: it starts before
+    // the motion that triggered them. But it comes out of a ring buffer that
+    // holds video only, while the microphone below is opened live, at the
+    // trigger. Muxed from zero, that puts the audio ahead of the picture by
+    // the entire pre-roll — you hear the cry several seconds before you see
+    // it, and the end of the clip is silent. The delay below realigns them.
+    const prerollMs = Math.max(0, Math.round(configuration.prebufferLength));
     if (includeAudio && this.options.audioDevice) {
       args.push("-f", "alsa", "-ar", "16000", "-ac", "1", "-i", this.options.audioDevice);
     }
@@ -442,6 +449,14 @@ export class BabymonRecordingDelegate implements CameraRecordingDelegate {
         "-b:a", `${codec.bitrate}k`,
         "-ac", String(codec.audioChannels ?? 1),
       );
+      if (prerollMs > 0) {
+        // Real silence rather than an -itsoffset timestamp shift: a track that
+        // simply begins late leaves the muxer and iOS to agree about a gap,
+        // and they do not always. Padding produces one continuous track whose
+        // silent head is an accurate record of a microphone that was not
+        // listening yet.
+        args.push("-af", `adelay=${prerollMs}:all=1`);
+      }
     } else {
       args.push("-an");
     }

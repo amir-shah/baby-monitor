@@ -77,6 +77,14 @@ export interface StreamingDelegateOptions {
   debug: boolean;
 }
 
+/**
+ * How long ffmpeg has to start producing before the stream request fails.
+ *
+ * Comfortably inside the Home app's own patience, so the user gets a clear
+ * failure rather than a spinner that resolves into nothing.
+ */
+const START_TIMEOUT_MS = 8_000;
+
 /** Fallback image when the camera is not producing frames yet. */
 const PLACEHOLDER_JPEG = Buffer.from(
   "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a" +
@@ -305,6 +313,15 @@ export class BabymonStreamingDelegate implements CameraStreamingDelegate {
       debug: this.options.debug,
       // Answer once ffmpeg is actually producing, not when spawn() returns.
       onStart: () => answer(),
+      // A camera that accepts the connection and then says nothing would
+      // otherwise leave the Home app spinning until it gave up on its own,
+      // with the process still running behind it. Fail the request instead,
+      // so iOS can retry against a clean slate.
+      startTimeoutMs: START_TIMEOUT_MS,
+      onStartTimeout: () => {
+        answer(new Error("ffmpeg produced no output; the camera may be unreachable"));
+        this.forceStop(request.sessionID);
+      },
       onExit: (code) => {
         if (!answered) {
           answer(new Error(`ffmpeg exited with code ${code} before streaming`));

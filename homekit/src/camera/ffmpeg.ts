@@ -73,11 +73,23 @@ export interface FfmpegOptions {
   label: string;
   /** Log every line of ffmpeg's stderr rather than only errors. */
   debug?: boolean;
-  /** Called once the first frame has been produced (first stderr output). */
+  /** Called once ffmpeg reports it is actually producing output. */
   onStart?: () => void;
   /** Called when the process exits for any reason. */
   onExit?: (code: number | null, signal: NodeJS.Signals | null) => void;
+  /**
+   * Give up waiting for `onStart` after this long and treat it as a failure.
+   * Without it an ffmpeg that hangs connecting — an RTSP server accepting the
+   * TCP connection and then saying nothing — leaves HomeKit's callback
+   * unanswered for ever and the process running behind it. 0 disables.
+   */
+  startTimeoutMs?: number;
+  /** Called if `startTimeoutMs` elapses before ffmpeg produces anything. */
+  onStartTimeout?: () => void;
 }
+
+/** Progress goes to fd 3: stdout carries media on several of these calls. */
+const PROGRESS_FD = 3;
 
 /**
  * A supervised ffmpeg process.
@@ -91,23 +103,68 @@ export class FfmpegProcess {
   private readonly log: Logger;
   private readonly process: ChildProcessWithoutNullStreams;
   private killTimer: NodeJS.Timeout | undefined;
+  private startTimer: NodeJS.Timeout | undefined;
   private stopped = false;
   private started = false;
   private stderrTail: string[] = [];
 
+  private markStarted(options: FfmpegOptions): void {
+    if (this.started) {
+      return;
+    }
+    this.started = true;
+    if (this.startTimer) {
+      clearTimeout(this.startTimer);
+      this.startTimer = undefined;
+    }
+    options.onStart?.();
+  }
+
   constructor(binary: string, options: FfmpegOptions) {
     this.label = options.label;
     this.log = options.log.child(options.label);
-    this.log.debug(`ffmpeg ${options.args.join(" ")}`);
 
-    this.process = spawn(binary, options.args, { env: process.env, stdio: "pipe" });
+    // `-progress` writes a machine-readable block every second for as long as
+    // ffmpeg is producing output, whatever `-loglevel` is set to. Treating the
+    // first line of stderr as "started" — which is what this did — only works
+    // when ffmpeg happens to print something, and at `-loglevel error` a
+    // healthy run prints nothing at all. The START callback was then never
+    // answered and the live view timed out on every ffmpeg 6 or newer, while
+    // working on developer machines running with debug logging on.
+    //
+    // fd 3, not stdout: the recording delegate reads fragmented MP4 from
+    // stdout, and progress text interleaved into that stream would corrupt
+    // every clip.
+    const args = ["-progress", `pipe:${PROGRESS_FD}`, "-nostats", ...options.args];
+    this.log.debug(`ffmpeg ${args.join(" ")}`);
+
+    this.process = spawn(binary, args, {
+      env: process.env,
+      stdio: ["pipe", "pipe", "pipe", "pipe"],
+    }) as ChildProcessWithoutNullStreams;
+
+    const progress = this.process.stdio[PROGRESS_FD];
+    if (progress && "on" in progress) {
+      (progress as NodeJS.ReadableStream).on("data", () => this.markStarted(options));
+      (progress as NodeJS.ReadableStream).resume();
+    }
+
+    if (options.startTimeoutMs && options.startTimeoutMs > 0) {
+      this.startTimer = setTimeout(() => {
+        this.startTimer = undefined;
+        if (!this.started) {
+          this.log.warn(`produced nothing within ${options.startTimeoutMs}ms; giving up`);
+          options.onStartTimeout?.();
+        }
+      }, options.startTimeoutMs);
+      this.startTimer.unref?.();
+    }
 
     this.process.stderr.setEncoding("utf8");
     this.process.stderr.on("data", (chunk: string) => {
-      if (!this.started) {
-        this.started = true;
-        options.onStart?.();
-      }
+      // Kept as a second trigger. Under `-loglevel info` ffmpeg speaks before
+      // the first progress block, and answering sooner is free.
+      this.markStarted(options);
       for (const line of chunk.split("\n")) {
         const trimmed = line.trim();
         if (!trimmed) {
@@ -136,6 +193,10 @@ export class FfmpegProcess {
       if (this.killTimer) {
         clearTimeout(this.killTimer);
         this.killTimer = undefined;
+      }
+      if (this.startTimer) {
+        clearTimeout(this.startTimer);
+        this.startTimer = undefined;
       }
       if (!this.stopped && code !== 0 && code !== null) {
         this.log.warn(`exited with code ${code}`);
