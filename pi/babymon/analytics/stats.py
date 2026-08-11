@@ -51,6 +51,7 @@ __all__ = [
     "norm_cdf",
     "norm_ppf",
     "norm_sf",
+    "paired_rotation_test",
     "percentile",
     "permutation_test",
     "phi_coefficient",
@@ -674,6 +675,80 @@ def permutation_test(
         (1 + extreme) / (1 + iterations),
         None,
         f"permutation:{effective_mode}",
+        {"iterations": float(iterations)},
+    )
+
+
+def paired_rotation_test(
+    xs: Sequence[float],
+    ys: Sequence[float],
+    statistic: Callable[[Sequence[float], Sequence[float]], float],
+    *,
+    iterations: int = 10000,
+    mode: str = "circular_shift",
+    seed: int | None = None,
+) -> TestResult:
+    """Two-sided permutation test for a statistic over paired series.
+
+    The counterpart of :func:`permutation_test` for a dose-response question:
+    "were nights with *more* of this worse still?" rather than "were nights
+    with it worse?". Same reasoning about the null — rotating one series
+    against the other keeps both run structures, where a free shuffle assumes
+    nights are exchangeable and they are not.
+
+    It exists because the asymptotic p-value from :func:`spearman` was being
+    shown beside the guarded headline p, and a reader has no way to know that
+    one of the two numbers on the row assumes something the other refuses to.
+    """
+    n = len(xs)
+    if n != len(ys):
+        raise ValueError("paired_rotation_test requires series of equal length")
+    if n < 4:
+        return TestResult(float("nan"), 1.0, None, f"rotation:{mode}")
+
+    observed = statistic(xs, ys)
+    if not math.isfinite(observed):
+        return TestResult(observed, 1.0, None, f"rotation:{mode}")
+
+    rng = random.Random(seed)
+    sequence = list(xs)
+    extreme = 0
+
+    if mode == "circular_shift" and n >= 12:
+        seen: set[tuple[float, ...]] = {tuple(sequence)}
+        offsets = list(range(1, n))
+        rng.shuffle(offsets)
+        usable = 0
+        for offset in offsets[:iterations]:
+            rotated = tuple(sequence[offset:] + sequence[:offset])
+            if rotated in seen:
+                continue
+            seen.add(rotated)
+            usable += 1
+            candidate = statistic(list(rotated), ys)
+            if math.isfinite(candidate) and abs(candidate) >= abs(observed) - 1e-12:
+                extreme += 1
+        if usable >= MIN_ROTATIONS:
+            return TestResult(
+                observed,
+                (1 + extreme) / (1 + usable),
+                None,
+                "rotation:circular_shift",
+                {"iterations": float(usable), "resolution": 1.0 / (1 + usable)},
+            )
+        extreme = 0
+
+    pool = list(xs)
+    for _ in range(iterations):
+        rng.shuffle(pool)
+        candidate = statistic(pool, ys)
+        if math.isfinite(candidate) and abs(candidate) >= abs(observed) - 1e-12:
+            extreme += 1
+    return TestResult(
+        observed,
+        (1 + extreme) / (1 + iterations),
+        None,
+        "rotation:shuffle",
         {"iterations": float(iterations)},
     )
 

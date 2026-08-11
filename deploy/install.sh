@@ -564,8 +564,25 @@ random_pin() {
     done
 }
 
+# Re-point a path that has moved, without touching a single secret.
+#
+# The systemd units are rewritten on every install, so ReadWritePaths follows
+# --data-dir. The env file was not, so re-installing to a new location left the
+# service pointed at the old one — which ProtectSystem=strict then refuses to
+# let it write. It fails at startup with a permission error naming a directory
+# the operator did not choose, and nothing in the install output hints at why.
+retarget_env_path() {
+    local key="$1" want="$2" current
+    current="$(sed -n "s|^${key}=||p" "$ENV_FILE" | head -1)"
+    [[ -n "$current" && "$current" != "$want" ]] || return 0
+    sed -i "s|^${key}=.*|${key}=${want}|" "$ENV_FILE"
+    warn "$key moved: $current -> $want (updated in $ENV_FILE)"
+}
+
 if [[ -f "$ENV_FILE" ]]; then
     skip "$ENV_FILE exists (secrets left alone)"
+    retarget_env_path BABYMON_PATHS__DATA_DIR "$DATA_DIR"
+    retarget_env_path BABYMON_PATHS__STATIC_DIR "$WEB_DIR"
 else
     api_password="$(random_alnum 24)"
     api_token="$(random_alnum 48)"

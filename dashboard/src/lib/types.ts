@@ -813,6 +813,15 @@ export interface Confounder {
   label?: string;
   /** Phi coefficient with the factor under test. */
   phi: number;
+  /** Nights carrying both tags. */
+  overlap_nights?: number;
+  /**
+   * Share of *this* tag's nights that also carry the factor under test. It is
+   * reported because phi cannot see a rare tag nested inside a common one —
+   * four nights fully contained in forty score only 0.26 — so concentration
+   * is what surfaces the companion that matters most.
+   */
+  share_of_theirs?: number;
 }
 
 /**

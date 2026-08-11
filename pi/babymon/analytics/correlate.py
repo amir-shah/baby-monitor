@@ -80,6 +80,14 @@ METRIC_UNITS: dict[str, str] = {
     "temp_c_mean": "°C", "humidity_mean": "%",
 }
 
+#: Shared nights below which two tags co-occurring is a coincidence rather
+#: than a confounder, and phi over them is noise.
+MIN_CONFOUND_OVERLAP = 3
+
+#: Share of a companion tag's nights that must fall inside this one before the
+#: two are called inseparable, whatever phi says about it.
+CONFOUND_SHARE = 0.75
+
 #: Decimals to keep for each metric, in the API payload and in the sentence.
 #:
 #: One decimal is right for minutes and points, and destroys the two metrics
@@ -132,6 +140,9 @@ class FactorResult:
     rho_ci95: tuple[float | None, float | None] = (None, None)
     slope_per_unit: float | None = None
     dose_response_p: float | None = None
+    #: The null behind ``dose_response_p``, so it can be compared with the
+    #: headline's ``test_method`` rather than assumed to match it.
+    dose_response_method: str | None = None
     dose_response_n: int = 0
 
     p_value: float | None = None
@@ -184,6 +195,7 @@ class FactorResult:
             "rho_ci95": [_round(self.rho_ci95[0], 3), _round(self.rho_ci95[1], 3)],
             "slope_per_unit": _round(self.slope_per_unit, 4),
             "dose_response_p": _round(self.dose_response_p, 5),
+            "dose_response_method": self.dose_response_method,
             "dose_response_n": self.dose_response_n,
             "p_value": _round(self.p_value, 5),
             "test_method": self.test_method,
@@ -313,6 +325,7 @@ def analyse_factors(
     results: list[FactorResult] = []
     insufficient: list[FactorResult] = []
     presence: dict[str, list[bool]] = {}
+    labels: dict[str, str] = {}
 
     all_slugs = sorted({slug for row in factor_matrix.values() for slug in row})
 
@@ -334,6 +347,7 @@ def analyse_factors(
         result.n_with = sum(flags)
         result.n_without = len(flags) - result.n_with
         presence[slug] = flags
+        labels[slug] = result.label
 
         if value_type is TagValueType.TEXT:
             result.reason = "Free-text tags are shown for reference but cannot be compared."
@@ -379,7 +393,12 @@ def analyse_factors(
         )
 
         if value_type.is_continuous:
-            _correlate_continuous(result, applied, values, seed=seed)
+            _correlate_continuous(
+                result, applied, values,
+                permutations=permutations,
+                permutation_mode=permutation_mode,
+                seed=seed,
+            )
 
         # Reverse-causality check: does the tag line up with the night *before*
         # it as strongly as with its own? An extra nap logged after a bad night
@@ -389,7 +408,7 @@ def analyse_factors(
         # comparison found something. Warning that a null result might also be
         # a null result for the wrong reason is noise.
         if len(values) > 2 and result.p_value is not None and result.p_value <= 0.10:
-            lagged = [*flags[1:], False]
+            lagged = _shift_to_previous_night(ordered_keys, flags)
             if min_per_group <= sum(lagged) <= len(lagged) - min_per_group:
                 lag = stats.permutation_test(
                     values,
@@ -409,7 +428,7 @@ def analyse_factors(
 
         results.append(result)
 
-    _flag_confounders(results, presence, confound_phi)
+    _flag_confounders(results, presence, labels, confound_phi)
     _apply_multiplicity(results, fdr_q)
     if shrinkage:
         _apply_shrinkage(results)
@@ -454,6 +473,30 @@ def analyse_factors(
         insufficient=insufficient,
         method=method,
     )
+
+
+def _shift_to_previous_night(keys: list[str], flags: list[bool]) -> list[bool]:
+    """Move each tag onto the night *before* it — by the calendar, not the list.
+
+    Shifting the list by one position asks whether the tag lines up with the
+    previous *analysable* night, which after a week of missing data is a night
+    from a week earlier. That comparison means nothing, and it is the one that
+    decides whether a real finding gets a reverse-causality warning attached.
+
+    A tag whose preceding night is missing simply drops out of the lagged
+    vector: it has nothing to be compared against.
+    """
+    from ..timeutil import shift_night
+
+    position = {key: index for index, key in enumerate(keys)}
+    lagged = [False] * len(keys)
+    for index, key in enumerate(keys):
+        if not flags[index]:
+            continue
+        previous = position.get(shift_night(key, -1))
+        if previous is not None:
+            lagged[previous] = True
+    return lagged
 
 
 def _compare_groups(
@@ -531,6 +574,8 @@ def _correlate_continuous(
     applied: list[float | None],
     values: list[float],
     *,
+    permutations: int,
+    permutation_mode: str,
     seed: int,
 ) -> None:
     """Dose-response check for tags carrying a number (screen minutes, lights-off).
@@ -545,6 +590,12 @@ def _correlate_continuous(
 
     Spearman rather than Pearson: these relationships are rarely linear and one
     unusual night should not set the slope. Theil-Sen for the same reason.
+
+    The p-value comes from the same rotation null as the headline, not from
+    Spearman's asymptotic t. The two numbers sit on the same row of the same
+    table, and one of them quietly assuming nights are independent — the very
+    assumption the other exists to avoid — is how a reader ends up trusting
+    the weaker of the two.
     """
     pairs = [(a, v) for a, v in zip(applied, values, strict=True) if a is not None]
     if len(pairs) < 8:
@@ -555,9 +606,17 @@ def _correlate_continuous(
         # Fewer than three distinct values is a boolean wearing a number's
         # clothes; a rank correlation over it says nothing.
         return
-    rho, test = stats.spearman(xs, ys)
+    rho, _ = stats.spearman(xs, ys)
+    guarded = stats.paired_rotation_test(
+        xs, ys,
+        lambda a, b: stats.spearman(a, b)[0],
+        iterations=min(2000, permutations),
+        mode=permutation_mode,
+        seed=seed + 2,
+    )
     result.spearman_rho = rho
-    result.dose_response_p = test.p_value
+    result.dose_response_p = guarded.p_value
+    result.dose_response_method = guarded.method
     result.dose_response_n = len(pairs)
     # Fisher z interval, which behaves better than a normal interval on rho.
     n = len(pairs)
@@ -571,24 +630,53 @@ def _correlate_continuous(
 
 
 def _flag_confounders(
-    results: list[FactorResult], presence: dict[str, list[bool]], threshold: float
+    results: list[FactorResult],
+    presence: dict[str, list[bool]],
+    labels: dict[str, str],
+    threshold: float,
 ) -> None:
+    """Flag tags that keep company with each other.
+
+    Every logged tag is considered as a possible companion, not only the ones
+    with enough nights to be tested in their own right. The rare tag is exactly
+    the dangerous one: four nights of teething that happen to be four of the
+    twelve dessert nights will move the dessert result, and being too rare to
+    test is not being too rare to confound — it only means nothing else will
+    ever surface it.
+    """
     for result in results:
         mine = presence.get(result.slug)
         if not mine:
             continue
-        for other in results:
-            if other.slug == result.slug:
+        for slug, theirs in presence.items():
+            if slug == result.slug or not theirs:
                 continue
-            theirs = presence.get(other.slug)
-            if not theirs:
+            overlap = sum(1 for a, b in zip(mine, theirs, strict=True) if a and b)
+            if overlap < MIN_CONFOUND_OVERLAP:
+                # One or two shared nights is a coincidence, and phi over a
+                # handful of nights is noise. Say nothing rather than send the
+                # reader chasing it.
                 continue
             phi = stats.phi_coefficient(mine, theirs)
-            if abs(phi) >= threshold:
-                overlap = sum(1 for a, b in zip(mine, theirs, strict=True) if a and b)
+            # phi alone cannot see a rare tag nested inside a common one. Four
+            # teething nights that are every one of them dessert nights score
+            # phi = 0.26 against a 0.3 threshold — perfect nesting, invisible.
+            # The ceiling is structural: phi is bounded by how lopsided the two
+            # rates are, so no threshold fixes it. Concentration answers the
+            # question phi cannot: what share of the companion's nights were
+            # also mine, and is that more than the base rate would give?
+            share = overlap / sum(theirs)
+            base = sum(mine) / len(mine)
+            concentrated = share >= max(CONFOUND_SHARE, 2.0 * base)
+            if abs(phi) >= threshold or concentrated:
                 result.confounders.append(
-                    {"slug": other.slug, "label": other.label, "phi": _round(phi, 2),
-                     "overlap_nights": overlap}
+                    {
+                        "slug": slug,
+                        "label": labels.get(slug, slug),
+                        "phi": _round(phi, 2),
+                        "overlap_nights": overlap,
+                        "share_of_theirs": _round(share, 2),
+                    }
                 )
         if result.confounders:
             names = ", ".join(c["label"] for c in result.confounders[:3])
