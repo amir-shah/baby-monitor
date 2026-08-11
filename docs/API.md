@@ -46,8 +46,8 @@ they can be used from `<img>` tags that cannot set headers.
 
 | Method | Path | Notes |
 |---|---|---|
-| `GET` | `/api/health` | `{"status":"ok"\|"degraded", "uptime_s":…, "components":{"camera":…,"audio":…,"env":…,"db":…}, "version":"…"}`. Never authenticated; used by systemd and the bridge. |
-| `GET` | `/api/system/info` | Host, kernel, model, temperatures, disk, versions. |
+| `GET` | `/api/health` | `{"status":"ok"\|"degraded", "uptime_s":…, "version":"…", "components":{…}}`. Each component is an object — `{name, ok, detail, last_ok_ms, …}` — not a status string, and carries subsystem-specific extras (the camera entry has its resolution and motion stats, the audio entry its noise floor). Never authenticated; used by systemd and the bridge. |
+| `GET` | `/api/system/info` | `{host:{hostname,system,release,machine,model,cpu_count,load_avg,uptime_s}, temperatures_c:{}, disk:{}, media:{}, database:{}, versions:{}, config_source, warnings:[]}`. Host facts are nested under `host`; temperatures are `temperatures_c`. |
 | `GET` | `/api/system/log` | Recent `system_log` rows. |
 | `GET` | `/api/metrics` | Prometheus text exposition. |
 | `GET` | `/api/config` | Effective config, secrets redacted. |
@@ -124,7 +124,13 @@ exposes that URL so the bridge does not need its own copy of the config.
 
 ## Events
 
-`GET /api/events` — `?child_id=&night_of=&from_ms=&to_ms=&kind=&label=&min_confidence=&acknowledged=&limit=&offset=&order=`
+`GET /api/events` — `?child_id=&night_of=&night_from=&night_to=&from_ms=&to_ms=&kind=&label=&min_confidence=&acknowledged=&exclude_false_positives=&limit=&offset=&order=`
+
+`night_from`/`night_to` are an inclusive range of night keys and are the right
+way to ask for "the last week". Resolving a night range into instants requires
+the child's timezone and day-boundary hour, so a client that computes
+`from_ms`/`to_ms` itself will use the browser's zone and return the wrong
+events near the boundary to anyone away from home.
 
 ```jsonc
 {
@@ -193,7 +199,7 @@ A `Note`:
 | Method | Path | Notes |
 |---|---|---|
 | `GET` | `/api/analytics/summary` | `?child_id=&days=30` — headline metrics, deltas vs the previous window, the age-appropriate target band, and the count of analysable nights. |
-| `GET` | `/api/analytics/trends` | `?child_id=&metric=tst_min&days=90&bucket=night\|week` — series plus a fitted trend (slope/CI) and a rolling median. |
+| `GET` | `/api/analytics/trends` | `?child_id=&metric=tst_min&days=90&bucket=night\|week` — series plus a fitted trend (Theil-Sen slope with a CI) and a rolling median. Weekly buckets carry `{week_of, value, median, n, min, max, p25, p75}`; `p25`/`p75` are null for a week with fewer than four nights, because an interpolated quartile over three points is noise drawn as a band. |
 | `GET` | `/api/analytics/factors` | **The correlation engine.** `?child_id=&metric=quality_score&days=180&min_n=5`. |
 | `GET` | `/api/analytics/regularity` | Sleep Regularity Index, bedtime/waketime variability, actogram raster data. |
 | `GET` | `/api/analytics/patterns` | Awakening clock-time histogram, day-of-week effects, environment (temp/noise) vs outcome binning. |

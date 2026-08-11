@@ -309,16 +309,40 @@ def trends(
 
 
 def _weekly(series: list[tuple[str, float]]) -> list[dict[str, Any]]:
-    """Collapse nights into ISO weeks, keyed by the Monday they start on."""
+    """Collapse nights into ISO weeks, keyed by the Monday they start on.
+
+    Each week carries its spread as well as its centre. A weekly mean drawn as
+    a bare line implies a precision a handful of nights does not have — one bad
+    night in a seven-night week moves it visibly — so the quartiles travel with
+    it and the chart draws them as a band. The median is reported alongside the
+    mean for the same reason: they diverge exactly when a week had an outlier,
+    which is when the reader most needs to know.
+    """
     buckets: dict[str, list[float]] = {}
     for key, value in series:
         date = parse_date(key)
         monday = (date - dt.timedelta(days=date.weekday())).isoformat()
         buckets.setdefault(monday, []).append(value)
-    return [
-        {"week_of": week, "value": _round(stats.mean(values)), "n": len(values)}
-        for week, values in sorted(buckets.items())
-    ]
+    out: list[dict[str, Any]] = []
+    for week, values in sorted(buckets.items()):
+        entry = {
+            "week_of": week,
+            "value": _round(stats.mean(values)),
+            "median": _round(stats.median(values)),
+            "n": len(values),
+            "min": _round(min(values)),
+            "max": _round(max(values)),
+        }
+        # Quartiles need enough points to mean something; with three nights the
+        # interpolated p25 sits between two of them and the band is noise.
+        if len(values) >= 4:
+            entry["p25"] = _round(stats.percentile(values, 25))
+            entry["p75"] = _round(stats.percentile(values, 75))
+        else:
+            entry["p25"] = None
+            entry["p75"] = None
+        out.append(entry)
+    return out
 
 
 def _fit_trend(xs: list[float], ys: list[float], metric: str, *, per: float) -> dict[str, Any]:

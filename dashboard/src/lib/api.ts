@@ -290,6 +290,9 @@ export interface Paging {
 export interface EventsQuery extends Paging {
   child_id?: number;
   night_of?: NightOf;
+  /** Inclusive night-key range. Resolved server-side in the child's timezone. */
+  night_from?: NightOf;
+  night_to?: NightOf;
   from_ms?: EpochMs;
   to_ms?: EpochMs;
   kind?: EventKind | readonly EventKind[];

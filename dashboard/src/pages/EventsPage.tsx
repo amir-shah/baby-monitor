@@ -26,7 +26,6 @@ import {
   formatDuration,
   formatPercent,
   nightLabel,
-  parseNightOf,
   shiftNightOf,
   titleCase,
 } from '../lib/format';
@@ -111,24 +110,6 @@ function isKind(value: string | null): value is EventKind {
   return value !== null && (EVENT_KINDS as readonly string[]).includes(value);
 }
 
-/**
- * `night_of` boundaries in epoch milliseconds.
- *
- * The API filters a *range* by `from_ms`/`to_ms`, so a range of nights has to
- * be turned into instants. A night begins at `children.day_boundary_hour`
- * (default noon) local time, and this page has no child loaded to read the
- * timezone from, so it uses the browser's — which is the same zone in every
- * realistic case (the phone is in the house). A single night skips all of
- * this and uses the exact `night_of` filter instead.
- */
-const DAY_BOUNDARY_HOUR = 12;
-
-function nightBoundaryMs(night: NightOf): number | null {
-  const parsed = parseNightOf(night);
-  if (!parsed) return null;
-  return new Date(parsed.year, parsed.month - 1, parsed.day, DAY_BOUNDARY_HOUR, 0, 0, 0).getTime();
-}
-
 function toQuery(filters: Filters): EventsQuery {
   const query: EventsQuery = {
     limit: filters.limit,
@@ -136,17 +117,16 @@ function toQuery(filters: Filters): EventsQuery {
     order: filters.order,
   };
 
+  // A night range goes to the server as night keys, not as instants. Turning
+  // "the 3rd to the 7th" into milliseconds here would need the child's
+  // timezone and day boundary, and this page would have used the browser's —
+  // which returns the wrong events to anyone opening the dashboard from
+  // another zone, silently and only near the boundary.
   if (filters.from && filters.from === filters.to) {
     query.night_of = filters.from;
   } else {
-    if (filters.from) {
-      const from = nightBoundaryMs(filters.from);
-      if (from !== null) query.from_ms = from;
-    }
-    if (filters.to) {
-      const to = nightBoundaryMs(shiftNightOf(filters.to, 1));
-      if (to !== null) query.to_ms = to;
-    }
+    if (filters.from) query.night_from = filters.from;
+    if (filters.to) query.night_to = filters.to;
   }
 
   if (filters.kind) query.kind = filters.kind;
@@ -513,11 +493,22 @@ function FilterPanel({
   );
 }
 
+/**
+ * The default day boundary, for naming the preset ranges only.
+ *
+ * This is the one place the browser's clock is the right clock: "last 7 days"
+ * is a label on a button, and if the phone thinks it is still yesterday
+ * evening the button should say so. The resulting night keys go to the server
+ * as keys, so a wrong guess here shifts which button looks selected and never
+ * which events come back.
+ */
+const PRESET_DAY_BOUNDARY_HOUR = 12;
+
 function presetRange(daysBack: number): Partial<Filters> {
   const today = new Date();
   const to = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
   // Before the day boundary, "tonight" is still yesterday's night_of.
-  const anchor = today.getHours() < DAY_BOUNDARY_HOUR ? shiftNightOf(to, -1) : to;
+  const anchor = today.getHours() < PRESET_DAY_BOUNDARY_HOUR ? shiftNightOf(to, -1) : to;
   return { from: shiftNightOf(anchor, -daysBack), to: anchor };
 }
 

@@ -961,43 +961,78 @@ export interface PatternsResponse {
 // System
 // ---------------------------------------------------------------------------
 
-export type ComponentHealth = 'ok' | 'degraded' | 'down' | 'disabled' | string;
-
-/** `GET /api/health` — never authenticated. */
+/**
+ * `GET /api/health`.
+ *
+ * Each component is a `ComponentHealth` object, not a status string, and it
+ * carries subsystem-specific extras alongside the common fields — the camera
+ * entry has its resolution and motion stats, the audio entry has its noise
+ * floor and detector counters. The index signature is what lets those through
+ * without every consumer having to know about them.
+ */
 export interface Health {
   status: 'ok' | 'degraded';
   uptime_s: number;
-  components: {
-    camera?: ComponentHealth;
-    audio?: ComponentHealth;
-    env?: ComponentHealth;
-    db?: ComponentHealth;
-    [key: string]: ComponentHealth | undefined;
-  };
   version: string;
+  components: Record<string, ComponentHealth | undefined>;
 }
 
+/** Free space where the database and the recordings live. */
 export interface DiskUsage {
   path: string;
-  total_bytes: number;
-  used_bytes: number;
-  free_bytes: number;
+  available: boolean;
+  total_bytes?: number;
+  used_bytes?: number;
+  free_bytes?: number;
+  used_fraction?: number | null;
 }
 
-/** `GET /api/system/info` */
+/** One subsystem's health, as `babymon.bus.ComponentHealth.to_dict()` emits it. */
+export interface ComponentHealth {
+  name?: string;
+  ok: boolean;
+  detail?: string;
+  last_ok_ms?: number | null;
+  /** Subsystem-specific extras, spread in by the producer. */
+  [key: string]: unknown;
+}
+
+/**
+ * `GET /api/system/info`.
+ *
+ * Host facts are nested under `host` and temperatures are `temperatures_c`;
+ * this mirrors `babymon/api/routers/system.py` exactly rather than flattening,
+ * because a shared type that disagrees with the wire is worse than no type —
+ * it makes the wrong read compile.
+ */
 export interface SystemInfo {
-  hostname: string;
-  model: string | null;
-  kernel: string | null;
-  os: string | null;
-  uptime_s: number;
-  /** CPU / SoC temperatures in Celsius, keyed by sensor name. */
-  temperatures: Record<string, number | null>;
-  load_avg?: [number, number, number] | null;
-  memory?: { total_bytes: number; available_bytes: number } | null;
-  disk: DiskUsage[];
+  host: {
+    hostname: string | null;
+    system: string | null;
+    release: string | null;
+    machine: string | null;
+    model: string | null;
+    cpu_count: number | null;
+    load_avg: [number, number, number] | number[] | null;
+    uptime_s: number | null;
+  };
+  /** Celsius, keyed by sensor name. Empty where the platform exposes none. */
+  temperatures_c: Record<string, number | null>;
+  disk: DiskUsage;
+  media: { dir: string; tracked_bytes: number };
+  database: {
+    path: string;
+    schema_version: number;
+    size_bytes: number;
+    free_bytes: number;
+    wal_bytes: number;
+    rows: Record<string, number>;
+    disk_total_bytes: number | null;
+    disk_free_bytes: number | null;
+  };
   versions: Record<string, string | null>;
-  timezone?: Timezone | null;
+  config_source: string | null;
+  warnings: string[];
 }
 
 export interface SystemLogRow {

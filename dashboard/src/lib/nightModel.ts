@@ -458,18 +458,24 @@ export type ScoreStatus =
 /**
  * Why there is no number, when there is no number.
  *
- * `docs/API.md` does not spell out how a suppressed score is signalled beyond
- * `quality_score: null`, so this reads the evidence that *is* in the contract —
- * `status`, `excluded`, `coverage` against `scoring.min_coverage`, `age_days` —
- * and falls back to any free-text reason the server chose to put in
- * `score_components`. If the API later grows an explicit `score_suppressed`
- * field, this is the one function that needs to learn about it.
+ * The server always explains itself: whenever `score_night` declines it puts
+ * the reason in `score_components.suppressed_reason`, and that string is what
+ * this shows. The branches below it are fallbacks for a night whose rollup was
+ * never computed at all, and they read only facts the night row states
+ * outright — `status`, `excluded`, `coverage` against the configured minimum.
+ *
+ * What they deliberately do NOT do is re-derive a rule the server owns. An
+ * earlier version hardcoded "under 120 days is too young", which was both a
+ * duplicate of the AASM band table in `sleep/metrics.py` and off by one against
+ * it — the newborn band ends at 121 days. A client that reimplements a
+ * threshold will drift from it, and the drift shows up as a night the
+ * dashboard calls unscoreable and the analytics happily scores.
  */
 export function scoreStatus(
   night: Night,
-  options: { minCoverage?: number; minAgeDays?: number } = {},
+  options: { minCoverage?: number } = {},
 ): ScoreStatus {
-  const { minCoverage = 0.6, minAgeDays = 120 } = options;
+  const { minCoverage = 0.6 } = options;
 
   if (night.quality_score !== null && Number.isFinite(night.quality_score)) {
     const band = scoreBand(night.quality_score);
@@ -494,15 +500,6 @@ export function scoreStatus(
       reason: night.exclude_reason
         ? `You excluded this night: ${night.exclude_reason}`
         : 'You excluded this night from the analytics.',
-    };
-  }
-
-  if (night.age_days !== null && night.age_days < minAgeDays) {
-    return {
-      kind: 'unavailable',
-      title: 'Too young to score',
-      reason:
-        'Under about four months, sleep is not yet consolidated into a night-time pattern, so a nightly score would measure normal newborn development rather than anything you did. The measurements below are still recorded.',
     };
   }
 

@@ -45,6 +45,8 @@ def list_events(
     repos: ReposDep,
     page: PageDep,
     night_of: Annotated[str | None, Query(pattern=r"^\d{4}-\d{2}-\d{2}$")] = None,
+    night_from: Annotated[str | None, Query(pattern=r"^\d{4}-\d{2}-\d{2}$")] = None,
+    night_to: Annotated[str | None, Query(pattern=r"^\d{4}-\d{2}-\d{2}$")] = None,
     from_ms: Annotated[int | None, Query()] = None,
     to_ms: Annotated[int | None, Query()] = None,
     kind: Annotated[str | None, Query(description="Comma-separated event kinds.")] = None,
@@ -64,9 +66,16 @@ def list_events(
                 code="unknown_kind",
                 detail={"valid": [str(v) for v in EventKind]},
             )
+    # A night range must be resolved here, not in the browser. "The nights of
+    # the 3rd to the 7th" is a span in the *child's* timezone with the child's
+    # day boundary in it; a client computing the millisecond bounds itself would
+    # use the phone's timezone and silently return the wrong events to anyone
+    # looking at the dashboard from another zone.
     events, total = repos.events.list(
         child_id=child.id,
         night_of=night_of,
+        night_from=night_from,
+        night_to=night_to,
         from_ms=from_ms,
         to_ms=to_ms,
         kinds=kinds,

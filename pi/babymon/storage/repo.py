@@ -933,6 +933,8 @@ class EventRepo:
         *,
         child_id: int | None = None,
         night_of: str | None = None,
+        night_from: str | None = None,
+        night_to: str | None = None,
         from_ms: int | None = None,
         to_ms: int | None = None,
         kinds: Sequence[str] | None = None,
@@ -953,6 +955,14 @@ class EventRepo:
         if night_of is not None:
             where.append("night_of = ?")
             params.append(night_of)
+        # night_of sorts lexicographically because it is YYYY-MM-DD, so a range
+        # needs no date arithmetic and no timezone.
+        if night_from is not None:
+            where.append("night_of >= ?")
+            params.append(night_from)
+        if night_to is not None:
+            where.append("night_of <= ?")
+            params.append(night_to)
         if from_ms is not None:
             where.append("start_ms >= ?")
             params.append(from_ms)
