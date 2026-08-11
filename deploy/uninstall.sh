@@ -20,6 +20,7 @@ UNIT_DIR=/etc/systemd/system
 PURGE_CONFIG=0
 PURGE_DATA=0
 PURGE_USER=0
+FORCE_PURGE_DATA=0
 PURGE_MEDIAMTX=0
 ASSUME_YES=0
 
@@ -53,11 +54,17 @@ Options:
                     recording, every snapshot, and the HAP pairing keys.
                     This is not recoverable. Back up first:
                         make backup
+  --force-purge-data
+                    As --purge-data, but skips the typed confirmation. This is
+                    the only way to delete a child's sleep history from a
+                    script; -y alone will not do it.
   --purge-user      Also delete the babymon system user and group.
   --purge-mediamtx  Also remove /usr/local/bin/mediamtx.
-  --all             All of the above.
-  -y, --yes         Do not prompt. Required for scripted use; you still have
-                    to pass --purge-data explicitly.
+  --all             Every --purge-* above, but NOT --force-purge-data: the
+                    confirmation for deleting your data still appears.
+  -y, --yes         Do not prompt for anything reinstallable. It deliberately
+                    does NOT cover deleting your data — use --force-purge-data
+                    for that.
   -h, --help        This text.
 EOF
 }
@@ -66,8 +73,11 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --purge-config)   PURGE_CONFIG=1 ;;
         --purge-data)     PURGE_DATA=1 ;;
+        --force-purge-data) PURGE_DATA=1; FORCE_PURGE_DATA=1 ;;
         --purge-user)     PURGE_USER=1 ;;
         --purge-mediamtx) PURGE_MEDIAMTX=1 ;;
+        # --all does not imply --force-purge-data: the data prompt still
+        # appears, which is the point of it.
         --all)            PURGE_CONFIG=1; PURGE_DATA=1; PURGE_USER=1; PURGE_MEDIAMTX=1 ;;
         -y|--yes)         ASSUME_YES=1 ;;
         -h|--help)        usage; exit 0 ;;
@@ -147,9 +157,26 @@ fi
 # Config
 # ---------------------------------------------------------------------------
 
+# --yes waives the prompt for things that can be reinstalled. It does NOT waive
+# it for anything irreplaceable: the header of this script promises that
+# deleting a child's sleep history takes an explicit flag AND typing the word,
+# and a promise that --yes quietly cancels is not a promise. Pass
+# --force-purge-data as well if you genuinely mean it from a script.
 confirm() {
     local prompt="$1" want="$2" answer
     (( ASSUME_YES )) && return 0
+    printf '\n%s%s%s\n' "$C_YELLOW" "$prompt" "$C_RESET"
+    read -r -p "Type '$want' to continue: " answer
+    [[ "$answer" == "$want" ]]
+}
+
+confirm_irreversible() {
+    local prompt="$1" want="$2" answer
+    (( FORCE_PURGE_DATA )) && return 0
+    if (( ASSUME_YES )) && [[ ! -t 0 ]]; then
+        warn "--yes does not cover deleting your data; pass --force-purge-data if you mean it"
+        return 1
+    fi
     printf '\n%s%s%s\n' "$C_YELLOW" "$prompt" "$C_RESET"
     read -r -p "Type '$want' to continue: " answer
     [[ "$answer" == "$want" ]]
@@ -183,7 +210,7 @@ if (( PURGE_DATA )); then
         if [[ -f "$DATA_DIR/babymon.db" ]] && command -v sqlite3 >/dev/null 2>&1; then
             nights="$(sqlite3 "$DATA_DIR/babymon.db" 'SELECT COUNT(*) FROM nights' 2>/dev/null || echo '?')"
         fi
-        if confirm "This permanently deletes $DATA_DIR ($size, $nights nights of sleep history), every recording, and the HomeKit pairing keys. There is no undo." "delete everything"; then
+        if confirm_irreversible "This permanently deletes $DATA_DIR ($size, $nights nights of sleep history), every recording, and the HomeKit pairing keys. There is no undo." "delete everything"; then
             rm -rf "$DATA_DIR"
             ok "removed $DATA_DIR"
         else
@@ -196,9 +223,15 @@ else
     skip "$DATA_DIR kept (--purge-data to remove)"
 fi
 
+# Logs go with the data, not with the code. A bare uninstall promises to leave
+# what you have collected where it is, and last month's journal is part of that.
 if [[ -d "$LOG_DIR" ]]; then
-    rm -rf "$LOG_DIR"
-    ok "removed $LOG_DIR"
+    if (( PURGE_DATA )); then
+        rm -rf "$LOG_DIR"
+        ok "removed $LOG_DIR"
+    else
+        skip "$LOG_DIR kept (--purge-data to remove)"
+    fi
 fi
 
 # ---------------------------------------------------------------------------
