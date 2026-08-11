@@ -58,6 +58,10 @@ log = logging.getLogger(__name__)
 
 __all__ = ["SensingRuntime"]
 
+#: How often the night's hypnogram is checkpointed to the database. The upper
+#: bound on how much of a night an unexpected power cut can take with it.
+SEGMENT_FLUSH_MS = 5 * 60_000
+
 
 class SensingRuntime:
     """Owns the sensors and the loops that read them."""
@@ -128,6 +132,7 @@ class SensingRuntime:
         self._open_motion_event_id: int | None = None
         self._lock = threading.Lock()
         self._last_maintenance_day: str | None = None
+        self._last_segment_flush_ms = 0
 
     # -- lifecycle ----------------------------------------------------------
 
@@ -418,15 +423,28 @@ class SensingRuntime:
             return
         with_retry(source, self._stop)
         interval = 1.0 / 5.0  # analysis at 5 fps; infant movement is slow
+        reconnect_delay = 1.0
 
         while not self._stop.is_set():
             started = time.monotonic()
             frame = source.read()
             if frame is None:
-                log.warning("camera stopped producing frames; reconnecting")
+                log.warning(
+                    "camera stopped producing frames; reconnecting in %.0fs", reconnect_delay
+                )
                 source.close()
+                # with_retry only backs off when open() *raises*. An ffmpeg
+                # source whose RTSP server is down opens fine and then produces
+                # nothing, so without a delay here this loop forks a process
+                # per iteration for as long as the camera stays away. The wait
+                # belongs to the caller because only the caller can tell a
+                # successful open from a useful one.
+                if self._stop.wait(reconnect_delay):
+                    break
+                reconnect_delay = min(reconnect_delay * 2.0, 30.0)
                 with_retry(source, self._stop)
                 continue
+            reconnect_delay = 1.0
 
             if self.config.camera.night_vision.auto:
                 night = self.day_night.update(frame)
@@ -547,10 +565,18 @@ class SensingRuntime:
             audio = dict(self._latest_audio)
             env = self._latest_env
 
-        motion_score = self.motion.restlessness_index if self.motion else 0.0
-        motion_active = self.motion.active if self.motion else False
         audio_ok = self.capture.healthy if self.capture else False
         video_ok = self.source.healthy if self.source else False
+
+        # A detector holds its last value indefinitely. Once the camera has
+        # gone, the restlessness index it was last left at is not a
+        # measurement — and a frozen 0.3 would keep the child scored AWAKE for
+        # the rest of the night, inventing an awakening out of an outage. The
+        # audio fields below have always been zeroed this way; motion was not.
+        motion_score = self.motion.restlessness_index if self.motion and video_ok else 0.0
+        motion_active = self.motion.active if self.motion and video_ok else False
+        if env is not None and not self._reading_is_fresh(env, ts):
+            env = None
 
         change = self.state_machine.observe(
             Observation(
@@ -586,6 +612,33 @@ class SensingRuntime:
         self.bus.publish(
             Topic.STATE, self.live_state(self.child.id).to_dict(), child_id=self.child.id
         )
+
+        # The hypnogram lived only in memory between day boundaries, so a power
+        # cut at 03:00 — the failure this device is most likely to meet, being
+        # a Pi on a shelf in a child's room — lost the whole night. Snapshots
+        # are non-destructive and each replaces the last, so writing one every
+        # few minutes costs a handful of rows and bounds the loss to that.
+        if ts - self._last_segment_flush_ms >= SEGMENT_FLUSH_MS:
+            self._last_segment_flush_ms = ts
+            try:
+                self._flush_segments(ts)
+            except Exception:
+                log.exception("could not checkpoint the hypnogram")
+
+    def _reading_is_fresh(self, reading: Reading, ts_ms: int) -> bool:
+        """Whether an environment reading still describes the room.
+
+        Unlike the camera and the microphone, a DHT22 has no stream to notice
+        the absence of: the last successful reading simply sits there, and
+        without this it is written into every telemetry row for as long as the
+        service runs. A month later the nursery is still recorded at 20.4 °C
+        and the temperature correlations are built on one afternoon's data.
+
+        Three polls of grace, because a cheap sensor failing a read now and
+        then is normal and not worth a gap in the chart.
+        """
+        window_ms = max(90_000, int(self.config.environment.poll_s * 3_000))
+        return ts_ms - reading.ts_ms <= window_ms
 
     def _record_sleep_event(self, change: Any) -> None:
         """Log the structural moments of a night, so they appear on the timeline."""

@@ -72,6 +72,10 @@ class AudioRing:
         data = np.asarray(samples, dtype=np.float32).reshape(-1)
         if data.size == 0:
             return
+        # Count what arrived, not what fitted. A single write larger than the
+        # ring keeps only its tail, but the stream position has still advanced
+        # by the whole of it, and readers address frames by that position.
+        produced = data.size
         if data.size >= self.capacity:
             data = data[-self.capacity :]
         with self._lock:
@@ -83,7 +87,7 @@ class AudioRing:
                 self._buffer[self._write :] = data[:split]
                 self._buffer[: end - self.capacity] = data[split:]
             self._write = end % self.capacity
-            self._written += data.size
+            self._written += produced
             self._last_ms = ts_ms if ts_ms is not None else now_ms()
 
     def latest(self, n: int) -> np.ndarray:
@@ -101,6 +105,42 @@ class AudioRing:
             out[:first] = self._buffer[start:]
             out[first:] = self._buffer[: n - first]
             return out
+
+    def ending_at(self, position: int, n: int) -> tuple[np.ndarray, int] | None:
+        """``n`` samples ending at absolute sample index ``position``.
+
+        Positions are counted from the start of the stream, so this addresses
+        a specific stretch of audio rather than "the newest". That is the
+        difference between an analysis loop that catches up and one that only
+        appears to: reading the newest window while advancing a consumed
+        counter re-analyses the same audio and never looks at the backlog at
+        all, which is what this replaced.
+
+        Returns the samples and the wall-clock time of the last of them,
+        derived from the sample rate rather than from the clock — a frame from
+        thirty seconds ago must not be stamped with now, or the event log puts
+        a cry at the wrong minute. ``None`` when the request has already been
+        overwritten or has not yet arrived.
+        """
+        if n <= 0:
+            return None
+        with self._lock:
+            written, last_ms = self._written, self._last_ms
+            if position > written or position < n:
+                return None
+            behind = written - position
+            if behind + n > min(written, self.capacity):
+                return None  # overwritten while we were away
+            end = (self._write - behind) % self.capacity
+            start = (end - n) % self.capacity
+            if start + n <= self.capacity:
+                out = self._buffer[start : start + n].copy()
+            else:
+                first = self.capacity - start
+                out = np.empty(n, dtype=np.float32)
+                out[:first] = self._buffer[start:]
+                out[first:] = self._buffer[: n - first]
+        return out, last_ms - int(behind * 1000 / self.sample_rate)
 
     def window(self, end_ms: int, duration_s: float) -> np.ndarray:
         """Samples covering ``duration_s`` ending at ``end_ms``.
@@ -289,26 +329,48 @@ class AudioCapture:
         loop falls behind it catches up by taking frames back to back, and if
         it is ahead it waits. A frame is skipped only when the ring has
         genuinely overrun, which is counted and surfaced on the health page.
+
+        Frames are addressed by position, so catching up really does mean
+        working through the backlog. Reading the newest window each time while
+        advancing a consumed counter — which is what this did — analyses the
+        same audio over and over, never looks at the audio it fell behind on,
+        and stamps the whole burst with the current time, so a cry recovered
+        after a stall is logged minutes from when it happened.
         """
         target = self.frame_samples
+        #: Absolute sample index of the end of the last frame yielded; 0 until
+        #: the first one, which ends at ``target``.
+        reach = self.ring.capacity - target  # oldest whole frame still held
         while not self._stop.is_set():
             available = self.ring.total_written
             if available < target:
                 time.sleep(0.05)
                 continue
-            behind = available - self._consumed
-            if behind < self.hop_samples:
-                time.sleep(min(0.2, self.hop_samples / self.sample_rate / 2))
+            if self._consumed == 0:
+                self._consumed = target
+                position = target
+            else:
+                behind = available - self._consumed
+                if behind < self.hop_samples:
+                    time.sleep(min(0.2, self.hop_samples / self.sample_rate / 2))
+                    continue
+                if behind > reach:
+                    # We fell so far behind that the samples we wanted are
+                    # gone. Jump to the oldest frame the ring can still serve.
+                    self._overruns += 1
+                    log.warning("audio analysis fell behind; skipped %d samples", behind - reach)
+                    self._consumed = available - reach
+                position = max(target, self._consumed + self.hop_samples)
+
+            chunk = self.ring.ending_at(position, target)
+            if chunk is None:
+                # Overwritten between the check above and the read. Rare; drop
+                # to the newest frame rather than spinning on a lost position.
+                self._consumed = max(0, available - self.hop_samples)
                 continue
-            if behind > self.ring.capacity:
-                # We fell so far behind that the samples we wanted are gone.
-                skipped = behind - self.ring.capacity
-                self._overruns += 1
-                self._consumed += skipped
-                log.warning("audio analysis fell behind; skipped %d samples", skipped)
-            self._consumed += self.hop_samples
+            self._consumed = position
             self._frames_read += 1
-            yield self.ring.latest(target), self.ring.last_write_ms
+            yield chunk
 
     def clip(self, end_ms: int, duration_s: float) -> np.ndarray:
         return self.ring.window(end_ms, duration_s)

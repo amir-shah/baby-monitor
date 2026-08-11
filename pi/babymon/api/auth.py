@@ -66,6 +66,11 @@ _MEDIA_SALT = "babymon.media.v1"
 #: typo or two without making the household wait.
 _FREE_ATTEMPTS = 3
 _MAX_BACKOFF_S = 300.0
+#: How long a failure is remembered after the fact. Longer than any penalty,
+#: because the count has to survive the free attempts for backoff to begin.
+_RETENTION_S = 900.0
+#: Distinct addresses tracked before the least recently active are evicted.
+_THROTTLE_CAPACITY = 512
 
 
 @dataclass(slots=True)
@@ -88,17 +93,37 @@ class LoginThrottle:
     """Per-IP exponential backoff on failed logins.
 
     Counts failures rather than requests, so the dashboard polling ``/me`` with
-    a valid cookie is never affected. State is bounded: an entry is forgotten
-    once its penalty has elapsed and the table is swept when it grows.
+    a valid cookie is never affected.
+
+    An entry outlives its penalty. The first few failures are free and carry no
+    penalty at all, so expiring entries the moment they stop being blocked
+    discards exactly the counts the backoff is built from — and because the
+    sweep ran whenever the table grew past its cap, an attacker spread across
+    enough addresses could trigger it on every attempt and reset every
+    accumulating count in the table, including their own. The state is instead
+    kept for ``retention_s`` after the last failure, which is what makes
+    repeated attempts add up.
+
+    The table is still bounded. When it is over the cap after sweeping, the
+    least recently active entries are evicted first, so a live attacker's
+    record is the last thing to go rather than the first.
     """
 
     def __init__(
-        self, *, free_attempts: int = _FREE_ATTEMPTS, max_backoff_s: float = _MAX_BACKOFF_S
+        self,
+        *,
+        free_attempts: int = _FREE_ATTEMPTS,
+        max_backoff_s: float = _MAX_BACKOFF_S,
+        retention_s: float = _RETENTION_S,
+        capacity: int = _THROTTLE_CAPACITY,
     ) -> None:
         self._free = free_attempts
         self._max = max_backoff_s
+        self._retention = retention_s
+        self._capacity = capacity
         self._lock = threading.Lock()
-        self._state: dict[str, tuple[int, float]] = {}
+        #: ip -> (failures, blocked_until, expires_at), all monotonic seconds.
+        self._state: dict[str, tuple[int, float, float]] = {}
 
     def retry_after_s(self, ip: str) -> float:
         """Seconds the caller must wait, or 0.0 if they may try now."""
@@ -106,30 +131,46 @@ class LoginThrottle:
             entry = self._state.get(ip)
             if entry is None:
                 return 0.0
-            _, blocked_until = entry
+            _, blocked_until, _ = entry
             return max(0.0, blocked_until - time.monotonic())
 
     def record_failure(self, ip: str) -> float:
         with self._lock:
-            failures, _ = self._state.get(ip, (0, 0.0))
+            now = time.monotonic()
+            failures, _, expires_at = self._state.get(ip, (0, 0.0, 0.0))
+            if expires_at and expires_at <= now:
+                failures = 0  # the last attempt was long enough ago to forget
             failures += 1
             penalty = 0.0
             if failures > self._free:
                 penalty = min(self._max, 2.0 ** (failures - self._free))
-            self._state[ip] = (failures, time.monotonic() + penalty)
-            if len(self._state) > 512:
-                self._sweep()
+            self._state[ip] = (
+                failures,
+                now + penalty,
+                now + max(self._retention, penalty),
+            )
+            if len(self._state) > self._capacity:
+                self._sweep(now)
             return penalty
 
     def record_success(self, ip: str) -> None:
         with self._lock:
             self._state.pop(ip, None)
 
-    def _sweep(self) -> None:
-        now = time.monotonic()
-        for key, (_, blocked_until) in list(self._state.items()):
-            if blocked_until <= now:
+    def _sweep(self, now: float) -> None:
+        for key, (_, _, expires_at) in list(self._state.items()):
+            if expires_at <= now:
                 del self._state[key]
+        if len(self._state) <= self._capacity:
+            return
+        # Still over. Drop the fewest failures first, oldest breaking the tie.
+        # An entry with one failure is nearly worthless and an entry with eight
+        # is the whole point of the table, so evicting by recency alone would
+        # let a flood of single attempts from fresh addresses push out the one
+        # record that was about to lock somebody out.
+        ordered = sorted(self._state.items(), key=lambda item: (item[1][0], item[1][2]))
+        for key, _ in ordered[: len(self._state) - self._capacity]:
+            del self._state[key]
 
 
 class AuthManager:

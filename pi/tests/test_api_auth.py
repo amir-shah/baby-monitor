@@ -161,3 +161,56 @@ def test_no_password_configured_never_matches() -> None:
     assert manager.check_password("") is False
     assert manager.check_password("anything") is False
     assert manager.check_bearer("anything") is False
+
+
+class TestThrottleBookkeeping:
+    """Counts have to survive long enough to become a penalty.
+
+    The first few failures are free, so an entry that is forgotten as soon as
+    it stops being blocked is forgotten before it has ever blocked anything.
+    """
+
+    def test_free_attempts_accumulate_across_a_sweep(self):
+        throttle = LoginThrottle(free_attempts=3, max_backoff_s=8.0, capacity=8)
+        # Two of the three free attempts used up, then enough other addresses
+        # to push the table over its cap and trigger sweeps repeatedly.
+        throttle.record_failure("10.0.0.1")
+        throttle.record_failure("10.0.0.1")
+        for i in range(60):
+            throttle.record_failure(f"10.9.{i // 256}.{i % 256}")
+        # Third attempt free, fourth penalised. Under the old sweep the entry
+        # was gone — it had no penalty yet, so it looked expired — and the
+        # backoff could never begin.
+        assert throttle.record_failure("10.0.0.1") == 0.0
+        assert throttle.record_failure("10.0.0.1") > 0
+
+    def test_a_flood_of_addresses_cannot_clear_an_active_attacker(self):
+        throttle = LoginThrottle(free_attempts=1, max_backoff_s=64.0, capacity=8)
+        for _ in range(4):
+            throttle.record_failure("10.0.0.1")
+        blocked = throttle.retry_after_s("10.0.0.1")
+        assert blocked > 0
+        for i in range(200):
+            throttle.record_failure(f"10.8.{i // 256}.{i % 256}")
+        assert throttle.retry_after_s("10.0.0.1") == pytest.approx(blocked, abs=1.0)
+
+    def test_the_table_stays_bounded(self):
+        throttle = LoginThrottle(capacity=16)
+        for i in range(500):
+            throttle.record_failure(f"10.7.{i // 256}.{i % 256}")
+        assert len(throttle._state) <= 16
+
+    def test_an_old_failure_is_forgotten(self):
+        throttle = LoginThrottle(free_attempts=1, max_backoff_s=8.0, retention_s=0.0)
+        throttle.record_failure("10.0.0.2")
+        # Retention of zero means the next attempt starts from scratch, so it
+        # is free again rather than incurring the second-failure penalty.
+        assert throttle.record_failure("10.0.0.2") == 0.0
+
+    def test_success_clears_the_record(self):
+        throttle = LoginThrottle(free_attempts=1, max_backoff_s=8.0)
+        throttle.record_failure("10.0.0.3")
+        throttle.record_failure("10.0.0.3")
+        assert throttle.retry_after_s("10.0.0.3") > 0
+        throttle.record_success("10.0.0.3")
+        assert throttle.retry_after_s("10.0.0.3") == 0.0
