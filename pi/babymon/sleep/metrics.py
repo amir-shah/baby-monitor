@@ -237,11 +237,28 @@ def compute_metrics(
     wake_runs: list[tuple[int, int]] = []
     current_wake: list[int] | None = None
 
+    previous_end: int | None = None
     for segment in ordered:
         start = max(segment.start_ms, onset)
         end = min(segment.end_ms, final)
         if end <= start:
             continue
+        if previous_end is not None and start > previous_end:
+            # An unobserved stretch inside the sleep period — the service was
+            # restarted, or the camera dropped. It is not sleep: WASO already
+            # counts it, via the identity below, because it is in the sleep
+            # period but not in TST. So it must not be allowed to join two
+            # bouts into one either, or the longest unbroken stretch of sleep
+            # would be reported across a gap where nothing was seen at all.
+            # It is not scored as an awakening: we know sleep was not
+            # observed, not that the child woke.
+            if current_bout > 0:
+                bouts.append(current_bout)
+                current_bout = 0
+            if current_wake is not None:
+                wake_runs.append((current_wake[0], current_wake[1]))
+                current_wake = None
+        previous_end = end
         duration = end - start
         if segment.state.counts_as_sleep:
             sleep_ms += duration

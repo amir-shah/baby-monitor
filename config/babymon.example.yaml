@@ -258,8 +258,14 @@ sleep:
   # A sustained quiet, still period this long counts as sleep onset.
   onset_quiet_min: 12
   # An awakening must last at least this long to be counted in WASO and in the
-  # awakenings tally. Shorter disturbances become "restless" instead.
+  # awakenings tally. Shorter disturbances become "restless" instead. The time
+  # accumulates rather than having to be unbroken: a child crying on and off
+  # for twenty minutes is awake, even though no single burst lasts five.
   awakening_min_min: 5
+  # ...but only if the pauses are short. Once the evidence has been absent for
+  # this long the pending change is abandoned, so a child who goes quiet for
+  # two solid minutes has settled and the crying before it was an arousal.
+  lapse_tolerance_s: 120
   # Sustained activity this long inside the wake window ends the night.
   final_wake_min: 20
   # No motion and no sound at all for this long means nobody is in the room.

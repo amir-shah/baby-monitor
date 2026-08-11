@@ -162,6 +162,47 @@ class TestDegenerateInput:
         assert m.awakenings == 0
 
 
+class TestGapsInTheRecord:
+    """An unobserved stretch is not sleep, and it is not an awakening either."""
+
+    def test_a_gap_does_not_join_two_bouts_into_one(self):
+        # The service restarted between minute 200 and minute 260. Reporting a
+        # 500-minute unbroken bout across it would be a claim about an hour
+        # nobody watched — and the number a parent reads most closely.
+        m = compute_metrics(
+            [seg(0, 200, S.ASLEEP), seg(260, 500, S.ASLEEP)], [], [], coverage=0.9
+        )
+        assert m.longest_bout_min == 240
+        assert m.tst_min == 440
+
+    def test_the_gap_still_lands_in_waso(self):
+        m = compute_metrics(
+            [seg(0, 200, S.ASLEEP), seg(260, 500, S.ASLEEP)], [], [], coverage=0.9
+        )
+        # It is inside the sleep period and it is not sleep, so the identity
+        # puts it in WASO whether or not we know what happened.
+        assert m.spt_min == 500
+        assert m.waso_min == 60
+
+    def test_a_gap_is_not_counted_as_an_awakening(self):
+        m = compute_metrics(
+            [seg(0, 200, S.ASLEEP), seg(260, 500, S.ASLEEP)], [], [], coverage=0.9
+        )
+        # We know sleep was not observed. We do not know the child woke.
+        assert m.awakenings == 0
+        assert m.stirrings == 0
+
+    def test_a_gap_does_not_merge_two_awakenings(self):
+        m = compute_metrics(
+            [
+                seg(0, 100, S.ASLEEP), seg(100, 110, S.AWAKE),
+                seg(170, 180, S.AWAKE), seg(180, 400, S.ASLEEP),
+            ],
+            [], [], awakening_min_min=5.0, coverage=0.9,
+        )
+        assert m.awakenings == 2
+
+
 class TestManualOverrides:
     def test_a_corrected_anchor_is_honoured_and_everything_recomputes(self, worked_example):
         base = compute_metrics(worked_example, [], [], coverage=1.0)

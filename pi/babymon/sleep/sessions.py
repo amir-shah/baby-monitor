@@ -325,10 +325,15 @@ class NightBuilder:
         for segment in segments:
             if not segment.state.counts_as_sleep:
                 continue
+            # ``range`` returns anything overlapping the window, so the child
+            # sleeping in past the day boundary arrives here as a segment that
+            # began yesterday. Only the part inside this 24-hour period belongs
+            # to it; the rest was already counted as last night's sleep.
+            start = max(segment.start_ms, window.start_ms)
             end = min(segment.end_ms, bedtime_start)
-            if end <= segment.start_ms:
+            if end <= start:
                 continue
-            duration = end - segment.start_ms
+            duration = end - start
             if duration >= self.config.sleep.nap_min_duration_min * 60_000:
                 nap_ms += duration
         return nap_ms / 60000.0

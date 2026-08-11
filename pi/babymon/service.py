@@ -114,6 +114,7 @@ class SensingRuntime:
             awakening_min_min=config.sleep.awakening_min_min,
             absent_after_min=config.sleep.absent_after_min,
             sample_interval_s=config.sleep.sample_interval_s,
+            lapse_tolerance_s=config.sleep.lapse_tolerance_s,
         )
         self.night_builder = NightBuilder(config, repos)
         self._segments: SegmentBuilder | None = None

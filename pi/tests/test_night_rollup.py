@@ -331,3 +331,32 @@ def test_a_nap_is_counted_once_as_a_nap_and_never_as_night_sleep(repos, child, c
     # 11 h of night plus 1.5 h of nap, each counted exactly once.
     assert night.tst_min + nap_min == pytest.approx(750.0)
     assert night.bedtime_ms == at(19)
+
+
+def test_a_lie_in_past_the_day_boundary_is_not_this_days_nap(repos, child, config):
+    """Only the part of a segment inside this 24-hour period belongs to it.
+
+    A child still asleep at noon produces a segment that began under
+    yesterday's key and crosses the boundary. Counting all of it here would
+    add last night's small hours to today's nap total — and it is the nap
+    total that decides whether the child met their age band's 24-hour target.
+    """
+    previous = "2026-08-09"
+    repos.segments.replace_night(
+        child.id,
+        previous,
+        [SleepSegment(0, child.id, previous, at(6, day=10), at(13, day=10), S.ASLEEP)],
+    )
+    repos.segments.replace_night(
+        child.id,
+        NIGHT,
+        [
+            SleepSegment(0, child.id, NIGHT, at(19), at(19, 15), S.SETTLING),
+            SleepSegment(0, child.id, NIGHT, at(19, 15), at(6, day=11), S.ASLEEP),
+        ],
+    )
+
+    night = NightBuilder(config, repos).rebuild(child, NIGHT, finalise=True)
+    assert night is not None
+    # 12:00 to 13:00 of that lie-in, not 06:00 to 13:00.
+    assert night.score_components["nap_min"] == pytest.approx(60.0)

@@ -254,6 +254,7 @@ class SleepConfig:
     awakening_min_min: float = 5.0
     final_wake_min: float = 20.0
     absent_after_min: float = 25.0
+    lapse_tolerance_s: float = 120.0
     track_naps: bool = True
     nap_min_duration_min: float = 20.0
 

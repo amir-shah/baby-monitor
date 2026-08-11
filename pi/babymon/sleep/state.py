@@ -19,6 +19,14 @@ spurious awakening in the night's tally and knock points off the score. The
 required persistence differs by direction: falling asleep is slow and should be
 scored slowly; waking is fast.
 
+The persistence is *accumulated*, not unbroken, and that distinction decides
+whether a real awakening is seen at all. Waking children do not cry
+continuously — they cry, pause, cry again. Demanding five unbroken minutes
+means the pauses reset the timer for ever and twenty minutes of settling
+battle is recorded as unbroken sleep. So the evidence banks the time it is
+present, and is only written off once it has been absent for
+``lapse_tolerance_s``.
+
 **Asymmetry around sleep.** Actigraphy conventions treat a brief arousal
 differently from an awakening, and so does this: activity while asleep first
 becomes RESTLESS, and only becomes AWAKE if it keeps up. That single rule is
@@ -77,8 +85,26 @@ class StateChange:
 
 @dataclass(slots=True)
 class _Candidate:
+    """Evidence for a state we have not committed to yet.
+
+    ``held_ms`` is the time the evidence has actually been present, which is
+    not the same as ``ts - since_ms``: a child crying on and off for twenty
+    minutes shows the evidence for perhaps half of them. It is the accumulated
+    time that has to clear the dwell requirement, because requiring it to be
+    unbroken means intermittent crying never clears it at all — the pauses
+    reset the timer, the state stays ASLEEP, and a twenty-minute settling
+    battle is recorded as unbroken sleep.
+
+    ``against_ms`` is how long it has been contradicted since the last time it
+    was seen. Past a tolerance the candidate is abandoned: a child who has been
+    quiet for two solid minutes has settled, and the crying before that was an
+    arousal, not the start of an awakening.
+    """
+
     state: SleepState
     since_ms: int
+    held_ms: int = 0
+    against_ms: int = 0
 
 
 class SleepStateMachine:
@@ -95,7 +121,9 @@ class SleepStateMachine:
         sound_awake_db: float = 10.0,
         cry_awake: float = 0.45,
         sample_interval_s: float = 15.0,
+        lapse_tolerance_s: float = 120.0,
     ) -> None:
+        self.lapse_tolerance_ms = int(lapse_tolerance_s * 1000)
         self.onset_quiet_ms = int(onset_quiet_min * 60_000)
         self.awakening_min_ms = int(awakening_min_min * 60_000)
         self.absent_after_ms = int(absent_after_min * 60_000)
@@ -108,6 +136,7 @@ class SleepStateMachine:
         self.state = SleepState.UNKNOWN
         self.state_since_ms: int | None = None
         self._candidate: _Candidate | None = None
+        self._last_observed_ms: int | None = None
         self._last_activity_ms: int | None = None
         self._sleep_onset_ms: int | None = None
         self._confidence = 0.0
@@ -123,24 +152,49 @@ class SleepStateMachine:
             return None
 
         instantaneous, confidence, reason = self._interpret(obs)
+        tick_ms = self._tick_ms(obs.ts_ms)
 
         if self._is_active(obs):
             self._last_activity_ms = obs.ts_ms
 
+        candidate = self._candidate
         if instantaneous is self.state:
-            self._candidate = None
             self._confidence = max(self._confidence, confidence)
+            # The evidence for the pending change has lapsed. Give it a while
+            # to come back before writing it off — see _Candidate.
+            if candidate is not None:
+                candidate.against_ms += tick_ms
+                if candidate.against_ms > self.lapse_tolerance_ms:
+                    self._candidate = None
             return None
 
-        if self._candidate is None or self._candidate.state is not instantaneous:
-            self._candidate = _Candidate(instantaneous, obs.ts_ms)
+        if candidate is None or candidate.state is not instantaneous:
+            self._candidate = _Candidate(instantaneous, obs.ts_ms, held_ms=tick_ms)
             return None
+
+        candidate.held_ms += tick_ms
+        candidate.against_ms = 0
 
         required = self._dwell_ms(self.state, instantaneous)
-        if obs.ts_ms - self._candidate.since_ms < required:
+        if candidate.held_ms < required:
             return None
 
         return self._transition(obs.ts_ms, instantaneous, confidence, reason)
+
+    def _tick_ms(self, ts_ms: int) -> int:
+        """How much time this observation accounts for.
+
+        Normally the sample interval. Measured from the previous observation
+        where that is sensible, so that a slow tick is not credited as a fast
+        one — but clamped, because a gap means the sensors were not reporting
+        and unobserved time is not evidence of anything.
+        """
+        nominal = int(self.sample_interval_s * 1000)
+        previous = self._last_observed_ms
+        self._last_observed_ms = ts_ms
+        if previous is None or ts_ms <= previous:
+            return nominal
+        return min(ts_ms - previous, nominal * 2)
 
     # -- interpretation -----------------------------------------------------
 

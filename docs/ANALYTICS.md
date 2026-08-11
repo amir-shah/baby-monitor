@@ -25,15 +25,36 @@ a hypnogram (`sleep_segments`, one state per contiguous interval) and
 
 | Anchor | Definition in code |
 |---|---|
-| **bedtime** | start of the *first* segment whose state counts as in bed |
+| **bedtime** | start of the in-bed run containing the night's sleep |
 | **sleep onset** | start of the *first* segment whose state counts as asleep |
 | **final wake** | end of the *last* segment whose state counts as asleep |
-| **out of bed** | end of the *last* segment whose state counts as in bed |
+| **out of bed** | end of that same in-bed run |
 
 "In bed" is `awake`, `settling`, `restless` or `asleep`. "Asleep" is `asleep`
 or `restless` — a child who is moving and vocalising but has not woken is still
 asleep, which is why `restless_min` is tracked separately rather than counted
 as wake.
+
+Two things narrow the segments the anchors are read off, and both exist
+because a `night_of` key covers a whole local day rather than just the night.
+
+**The nocturnal cut.** Segments ending before the start of
+`sleep.bedtime_window` are the day's naps and are excluded; one straddling the
+cut is clipped to it. Without this an afternoon nap under the same key becomes
+the night's bedtime and sleep onset, and the whole afternoon between nap and
+bedtime is counted as wake after sleep onset. It is the same instant naps are
+counted up to, so no minute of sleep is counted both as a nap and as night
+sleep. If nothing survives the cut — a child put down ill at 15:00 — the cut is
+ignored and the night is measured rather than discarded.
+
+**The rest interval.** Bedtime is not simply the first in-bed segment left
+after the cut: the search runs outwards from the night's sleep and stops at
+`absent` or at a gap in the record. A child who plays in their room after
+breakfast would otherwise stretch time in bed across the morning. What this
+cannot do is tell a child lying awake in bed from one playing on the bedroom
+floor — the state machine calls both `awake` — so an early-evening play session
+in the bedroom does count towards time in bed. Setting the start of
+`sleep.bedtime_window` to when the child actually goes up is the remedy.
 
 Any of the four can be overridden by hand (`PATCH /api/nights/{night_of}`).
 An override is honoured and **everything downstream is recomputed against it**;
@@ -55,7 +76,7 @@ strictly after its start is `None`, not zero.
 | **TASAFA** | `max(0, out_of_bed − final_wake)` | Time awake after final awakening — lying in bed awake in the morning. |
 | **Awakenings** | count of maximal wake runs inside `[onset, final_wake]` of length ≥ `sleep.awakening_min_min` (default 5 min) | |
 | **Stirrings** | total wake runs − awakenings | The short disturbances, counted but not held against the night. |
-| **Longest bout** | `max(bouts)` over contiguous sleep runs inside the sleep period | For a small child, the number a parent actually cares about. |
+| **Longest bout** | `max(bouts)` over contiguous sleep runs inside the sleep period | For a small child, the number a parent actually cares about. A gap in the record breaks a bout: an unobserved stretch is not evidence of unbroken sleep. |
 | **Restless** | Σ time in state `restless` inside the sleep period | |
 | **Midpoint** | `sleep_onset + (final_wake − sleep_onset) // 2` | Integer division; the circadian anchor. |
 | **Motion index** | mean of `sample.motion` for samples with `onset ≤ ts < final_wake` | |
