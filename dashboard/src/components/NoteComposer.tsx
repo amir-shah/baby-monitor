@@ -135,7 +135,13 @@ export function NoteComposer({
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState(false);
 
-  const [night, setNight] = useState<NightOf>(() => note?.night_of ?? nightOf);
+  /**
+   * Null means "whatever night the page is on", so a composer left open past
+   * the day boundary follows the rollover instead of quietly logging to
+   * yesterday. Picking a night pins it.
+   */
+  const [nightOverride, setNightOverride] = useState<NightOf | null>(() => note?.night_of ?? null);
+  const night = nightOverride ?? nightOf;
   const [whenMode, setWhenMode] = useState<WhenMode>(() => {
     if (!note) return 'now';
     return note.ts_ms === null ? 'night' : 'at';
@@ -147,12 +153,6 @@ export function NoteComposer({
   /** Left false while the user has not touched the time, so an edit that only
    *  changes the wording keeps the original timestamp to the millisecond. */
   const [timeTouched, setTimeTouched] = useState(false);
-
-  // A new note follows the page's night as it rolls over at the day boundary;
-  // an edit stays on the night it was written about.
-  useEffect(() => {
-    if (!note) setNight(nightOf);
-  }, [nightOf, note]);
 
   useEffect(() => {
     if (autoFocus) bodyRef.current?.focus();
@@ -527,7 +527,7 @@ export function NoteComposer({
           if (value) setWhenMode('at');
         }}
         night={night}
-        onNightChange={setNight}
+        onNightChange={setNightOverride}
         timezone={timezone}
         existingTs={note?.ts_ms ?? null}
       />

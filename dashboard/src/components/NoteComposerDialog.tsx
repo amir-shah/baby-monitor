@@ -13,6 +13,7 @@
  * half-written thought.
  */
 
+import { useState } from 'react';
 import { Modal } from './Modal';
 import { NoteComposer } from './NoteComposer';
 import { nightOf as currentNightOf } from '../lib/format';
@@ -34,8 +35,12 @@ export interface NoteComposerDialogProps {
   onSaved?: (note: Note) => void;
 }
 
-export function NoteComposerDialog({
-  open,
+export function NoteComposerDialog(props: NoteComposerDialogProps) {
+  if (!props.open) return null;
+  return <NoteComposerSheet {...props} />;
+}
+
+function NoteComposerSheet({
   onClose,
   childId,
   nightOf,
@@ -45,9 +50,10 @@ export function NoteComposerDialog({
   boundaryHour,
   onSaved,
 }: NoteComposerDialogProps) {
-  if (!open) return null;
-
-  const night = nightOf ?? currentNightOf(Date.now(), { tz: timezone, boundaryHour });
+  // Read once, when the sheet opens: the clock crossing the day boundary
+  // mid-sentence must not change the key and throw the draft away.
+  const [openedNight] = useState(() => currentNightOf(Date.now(), { tz: timezone, boundaryHour }));
+  const night = nightOf ?? openedNight;
   const key = `${note?.id ?? 'new'}|${night}|${(initialTags ?? []).join(',')}`;
 
   return (
