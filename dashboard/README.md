@@ -1,6 +1,6 @@
 # babymon dashboard
 
-The web UI for [babymon](../README). Vite + React 18 + TypeScript, served by
+The web UI for [babymon](../README.md). Vite + React 18 + TypeScript, served by
 the Python API from `paths.static_dir` once built.
 
 It is designed for two situations: a phone at 3am in a dark bedroom, and a
