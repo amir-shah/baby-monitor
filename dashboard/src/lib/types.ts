@@ -782,8 +782,12 @@ export interface TrendFit {
   intercept: number | null;
   p_value: number | null;
   r2: number | null;
-  /** 'improving' | 'worsening' | 'flat' once the CI excludes zero. */
-  direction?: 'improving' | 'worsening' | 'flat' | null;
+  /**
+   * Which way, once the CI excludes zero. `rising`/`falling` rather than
+   * `improving`/`worsening` for metrics with a comfortable band instead of a
+   * good end — a warmer nursery is not a better one.
+   */
+  direction?: 'improving' | 'worsening' | 'rising' | 'falling' | 'flat' | null;
 }
 
 /** `GET /api/analytics/trends` */
@@ -811,7 +815,17 @@ export interface Confounder {
   phi: number;
 }
 
-export type FactorVerdict = 'worse' | 'better' | 'inconclusive' | 'insufficient_data';
+/**
+ * `shifted` is for metrics with a comfortable band rather than a good end —
+ * room temperature and humidity. A real difference, but not one the server is
+ * entitled to call good or bad.
+ */
+export type FactorVerdict =
+  | 'worse'
+  | 'better'
+  | 'shifted'
+  | 'inconclusive'
+  | 'insufficient_data';
 
 /**
  * One row of the correlation engine.

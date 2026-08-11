@@ -106,6 +106,14 @@ LOWER_IS_BETTER = frozenset(
      "restless_min", "motion_index"}
 )
 
+#: Metrics with a comfortable band rather than a good end. Room temperature has
+#: no direction that is an improvement: 15 °C and 27 °C are both wrong, and a
+#: metric that is in neither set defaults to "higher is better", which reported
+#: a nursery getting steadily hotter as a night getting steadily better. These
+#: are shown as rising or falling, and left for the reader to judge against
+#: ``environment.comfort``.
+BANDED = frozenset({"temp_c_mean", "humidity_mean"})
+
 EPOCHS_PER_DAY = 1440
 MINUTE_MS = 60_000
 #: Below this the Sleep Regularity Index is dominated by whichever two nights
@@ -259,6 +267,8 @@ def _timing(nights: list[Night], child: Child) -> dict[str, Any]:
 def _direction(delta: float | None, metric: str) -> str | None:
     if delta is None or abs(delta) < 1e-9:
         return "flat" if delta is not None else None
+    if metric in BANDED:
+        return "rising" if delta > 0 else "falling"
     improved = (delta < 0) if metric in LOWER_IS_BETTER else (delta > 0)
     return "improving" if improved else "worsening"
 
@@ -304,7 +314,12 @@ def trends(
         "from": window.start,
         "to": window.end,
         "points": points,
-        "trend": _fit_trend(xs, ys, metric, per=7.0 if bucket == "night" else 1.0),
+        # xs is a day index either way — for weekly buckets it is the day index
+        # of the week's Monday — so the slope is per day whatever the bucket,
+        # and the conversion to a week is the same seven. Scaling weekly
+        # buckets by one reported a figure seven times too small, under a name
+        # that says otherwise.
+        "trend": _fit_trend(xs, ys, metric),
     }
 
 
@@ -345,7 +360,8 @@ def _weekly(series: list[tuple[str, float]]) -> list[dict[str, Any]]:
     return out
 
 
-def _fit_trend(xs: list[float], ys: list[float], metric: str, *, per: float) -> dict[str, Any]:
+def _fit_trend(xs: list[float], ys: list[float], metric: str) -> dict[str, Any]:
+    """Theil-Sen fit. ``xs`` is in days, so the weekly figure is the slope times seven."""
     if len(xs) < 3:
         return {"n": len(xs), "slope": None, "slope_per_week": None, "intercept": None,
                 "ci95": [None, None], "direction": None,
@@ -355,13 +371,15 @@ def _fit_trend(xs: list[float], ys: list[float], metric: str, *, per: float) -> 
     # A trend whose interval spans zero is not a trend, however pretty the line.
     if low is not None and high is not None and low <= 0.0 <= high:
         direction = "flat"
+    elif metric in BANDED:
+        direction = "rising" if slope > 0 else "falling"
     else:
         improved = (slope < 0) if metric in LOWER_IS_BETTER else (slope > 0)
         direction = "improving" if improved else "worsening"
     return {
         "n": len(xs),
         "slope": _round(slope, 4),
-        "slope_per_week": _round(slope * per, 3),
+        "slope_per_week": _round(slope * 7.0, 3),
         "intercept": _round(intercept, 3),
         "ci95": [_round(low, 4), _round(high, 4)],
         "direction": direction,
@@ -387,8 +405,12 @@ def _sen_slope_ci(xs: list[float], ys: list[float]) -> tuple[float | None, float
     if total < 2:
         return None, None
     spread = stats.Z_95 * math.sqrt(n * (n - 1) * (2 * n + 5) / 18.0)
+    # Sen's limits are the M1-th and the (M2+1)-th largest pairwise slopes,
+    # counting from one. In zero-based indices that is M1-1 and M2 — taking
+    # M2-1 for the upper limit, as this did, drops one order statistic off the
+    # top of every interval and reports a trend as certain when it is not.
     low_index = round((total - spread) / 2.0) - 1
-    high_index = round((total + spread) / 2.0) - 1
+    high_index = round((total + spread) / 2.0)
     low_index = min(max(low_index, 0), total - 1)
     high_index = min(max(high_index, 0), total - 1)
     return slopes[low_index], slopes[high_index]

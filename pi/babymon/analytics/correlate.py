@@ -64,6 +64,13 @@ LOWER_IS_BETTER = frozenset(
      "motion_index", "restless_min"}
 )
 
+#: Outcome metrics with a comfortable band rather than a good end. A metric in
+#: neither set defaults to "higher is better", which called a nursery two
+#: degrees warmer on dessert nights a *better* outcome. There is no verdict to
+#: give here — 15 °C and 27 °C are both wrong — so the difference is reported
+#: and the direction left to the reader and ``environment.comfort``.
+NO_BETTER_DIRECTION = frozenset({"temp_c_mean", "humidity_mean"})
+
 #: Natural units for the headline difference, keyed by metric.
 METRIC_UNITS: dict[str, str] = {
     "tst_min": "min", "tib_min": "min", "sol_min": "min", "waso_min": "min",
@@ -298,6 +305,7 @@ def analyse_factors(
         )
 
     lower_better = metric in LOWER_IS_BETTER
+    banded = metric in NO_BETTER_DIRECTION
     unit = METRIC_UNITS.get(metric, "")
     decimals = METRIC_DECIMALS.get(metric, DEFAULT_DECIMALS)
     span = len(ordered_keys)
@@ -406,7 +414,7 @@ def analyse_factors(
     if shrinkage:
         _apply_shrinkage(results)
     for result in results:
-        _finalise(result, lower_better, min_per_group)
+        _finalise(result, lower_better, min_per_group, banded=banded)
 
     # Rank by the shrunken effect where we have one, so that a noisy small
     # sample cannot buy its way to the top of the list.
@@ -617,7 +625,9 @@ def _apply_shrinkage(results: list[FactorResult]) -> None:
             result.shrunk_effect = result.effect_size.get("value")
 
 
-def _finalise(result: FactorResult, lower_is_better: bool, min_per_group: int) -> None:
+def _finalise(
+    result: FactorResult, lower_is_better: bool, min_per_group: int, *, banded: bool = False
+) -> None:
     smaller_group = min(result.n_with, result.n_without)
     if smaller_group < min_per_group:
         result.tier = EvidenceTier.INSUFFICIENT
@@ -633,6 +643,10 @@ def _finalise(result: FactorResult, lower_is_better: bool, min_per_group: int) -
 
     if result.diff is None or crosses_zero or not result.significant:
         result.verdict = "inconclusive"
+    elif banded:
+        # A real difference, but not one this code is entitled to call good or
+        # bad. "shifted" is the honest verdict for a banded metric.
+        result.verdict = "shifted"
     else:
         improved = (result.diff < 0) if lower_is_better else (result.diff > 0)
         result.verdict = "better" if improved else "worse"

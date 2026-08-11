@@ -360,3 +360,94 @@ def test_a_lie_in_past_the_day_boundary_is_not_this_days_nap(repos, child, confi
     assert night is not None
     # 12:00 to 13:00 of that lie-in, not 06:00 to 13:00.
     assert night.score_components["nap_min"] == pytest.approx(60.0)
+
+
+# ---------------------------------------------------------------------------
+# Regularity
+# ---------------------------------------------------------------------------
+
+
+class TestClockColumns:
+    """The SRI grid asks "same clock position", which is not "same elapsed minute".
+
+    Two days a year those differ, and indexing by elapsed minutes makes every
+    minute after the transition compare against the wrong minute of the
+    neighbouring day — so a clock change reads as two nights of chaos, and the
+    fourteen-day window carries it for a fortnight.
+    """
+
+    @staticmethod
+    def columns(key: str):
+        from babymon.sleep.sessions import _clock_columns
+        from babymon.timeutil import NightWindow
+
+        window = NightWindow.for_key(key, TZ, 12)
+        return _clock_columns(window, TZ, 12), window
+
+    def test_an_ordinary_day_is_the_identity(self):
+        columns, window = self.columns("2026-08-10")
+        assert window.duration_h == 24
+        assert columns == list(range(1440))
+
+    def test_noon_is_always_column_zero(self):
+        for key in ("2026-08-10", "2026-03-07", "2026-10-31"):
+            columns, _ = self.columns(key)
+            assert columns[0] == 0
+
+    def test_a_25_hour_day_keeps_all_of_itself(self):
+        columns, window = self.columns("2026-10-31")  # fall back
+        assert window.duration_h == 25
+        assert len(columns) == 1500  # not truncated at 1440
+        assert max(columns) < 1440
+
+    def test_a_23_hour_day_is_not_padded_with_unknowns(self):
+        columns, window = self.columns("2026-03-07")  # spring forward
+        assert window.duration_h == 23
+        assert len(columns) == 1380
+
+    def test_the_same_clock_time_lands_in_the_same_column_across_dst(self):
+        # 21:00 local on an ordinary night and on the spring-forward night.
+        ordinary, ordinary_w = self.columns("2026-08-10")
+        shifted, shifted_w = self.columns("2026-03-07")
+
+        def column_at(hour: int, day: int, month: int, columns, window) -> int:
+            when = to_ms(dt.datetime(2026, month, day, hour, tzinfo=get_tz(TZ)))
+            return columns[int((when - window.start_ms) / 60_000)]
+
+        assert column_at(21, 10, 8, ordinary, ordinary_w) == column_at(
+            21, 7, 3, shifted, shifted_w
+        )
+
+    def test_the_morning_after_a_clock_change_still_lines_up(self):
+        # 07:00 the next morning, on both sides of the transition.
+        ordinary, ordinary_w = self.columns("2026-08-10")
+        shifted, shifted_w = self.columns("2026-03-07")
+        a = ordinary[int(
+            (to_ms(dt.datetime(2026, 8, 11, 7, tzinfo=get_tz(TZ))) - ordinary_w.start_ms) / 60_000
+        )]
+        b = shifted[int(
+            (to_ms(dt.datetime(2026, 3, 8, 7, tzinfo=get_tz(TZ))) - shifted_w.start_ms) / 60_000
+        )]
+        assert a == b
+
+
+def test_a_sliver_of_data_does_not_count_as_a_night_of_regularity(repos, child, config):
+    """One minute a night agrees with itself perfectly.
+
+    Counting any day with a single observed minute toward the seven-night
+    minimum let fourteen almost-empty nights produce a Sleep Regularity Index
+    of 100 — a perfect score for a monitor that had recorded nothing.
+    """
+    from babymon.timeutil import night_dates
+
+    builder = NightBuilder(config, repos)
+    keys = list(night_dates("2026-08-01", "2026-08-14"))
+    for key in keys:
+        start = to_ms(dt.datetime.fromisoformat(f"{key}T22:00").replace(tzinfo=get_tz(TZ)))
+        repos.segments.replace_night(
+            child.id,
+            key,
+            [SleepSegment(0, child.id, key, start, start + MINUTE, S.ASLEEP)],
+        )
+
+    assert builder._sri(child, keys[-1]) is None

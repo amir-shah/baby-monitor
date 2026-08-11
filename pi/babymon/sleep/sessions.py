@@ -20,6 +20,8 @@ from ..models import Child, Night, NightStatus, SleepState
 from ..storage import Repos
 from ..timeutil import (
     NightWindow,
+    from_ms,
+    get_tz,
     local_window_bounds,
     minutes_after_local_midnight,
     now_ms,
@@ -46,6 +48,44 @@ COMPUTE_VERSION = 2
 REGULARITY_WINDOW_NIGHTS = 14
 #: Minimum nights before timing consistency can be scored at all.
 REGULARITY_MIN_NIGHTS = 7
+#: Minutes of a day that must have been observed before it counts as one of
+#: those nights. Eight hours: enough to contain a night, and not so much that a
+#: monitor switched off in the morning fails to qualify.
+MIN_SRI_MINUTES = 8 * 60
+
+
+def _clock_columns(
+    window: NightWindow, tz: str | None, day_boundary_hour: int
+) -> list[int]:
+    """Which 1440-minute column each elapsed minute of this day belongs to.
+
+    The Sleep Regularity Index asks whether the child was in the same state at
+    the same *clock position* on consecutive days. Indexing the grid by minutes
+    elapsed since the local day boundary is the same thing for 363 days a year
+    and wrong for the other two: after a spring-forward, elapsed minute 780 is
+    an hour later on the clock than it was yesterday, so every minute of the
+    night after the transition compares against the wrong minute of its
+    neighbour. Two days of real irregularity then contaminate the fourteen-day
+    window either side of them — SRI drops for a fortnight because a clock
+    changed.
+
+    Also fixes the length: a 25-hour day loses its last hour to the 1440 cap,
+    and a 23-hour day leaves an hour of spurious unknowns at the end.
+    """
+    minutes = max(1, round((window.end_ms - window.start_ms) / 60_000))
+    zone = get_tz(tz)
+    offset_start = from_ms(window.start_ms, zone).utcoffset()
+    offset_end = from_ms(window.end_ms - 1, zone).utcoffset()
+    if offset_start == offset_end and minutes == 1440:
+        # The ordinary day, and the reason this is not simply a loop.
+        return list(range(1440))
+
+    base = day_boundary_hour * 60
+    columns: list[int] = []
+    for index in range(minutes):
+        local = from_ms(window.start_ms + index * 60_000, zone)
+        columns.append((local.hour * 60 + local.minute - base) % 1440)
+    return columns
 
 
 class NightBuilder:
@@ -206,6 +246,16 @@ class NightBuilder:
             child.timezone,
             child.day_boundary_hour,
         )
+        # A bedtime window opening before the day boundary — day_boundary_hour
+        # 20 with a window starting at 17:00 — resolves onto the following
+        # evening, which is past the end of this night. Everything would then
+        # be "before bedtime", so the whole night would be counted as nap and
+        # the night itself would have no sleep in it at all. Clamped, that
+        # misconfiguration costs the nap/night split rather than the night;
+        # `config.warnings()` names it so it can be corrected.
+        window = NightWindow.for_key(night_of, child.timezone, child.day_boundary_hour)
+        if not window.start_ms <= start < window.end_ms:
+            return window.start_ms
         return start
 
     @staticmethod
@@ -290,16 +340,24 @@ class NightBuilder:
                 days.append([None] * 1440)
                 continue
             grid: list[bool | None] = [None] * 1440
+            columns = _clock_columns(window, child.timezone, child.day_boundary_hour)
             for segment in segments:
                 first = max(0, int((segment.start_ms - window.start_ms) / 60_000))
-                last = min(1440, int((segment.end_ms - window.start_ms) / 60_000))
+                last = min(len(columns), int((segment.end_ms - window.start_ms) / 60_000))
                 asleep = segment.state.counts_as_sleep
                 for minute in range(first, last):
-                    grid[minute] = asleep
+                    grid[columns[minute]] = asleep
             days.append(grid)
 
-        scored = [d for d in days if any(v is not None for v in d)]
-        if len(scored) < REGULARITY_MIN_NIGHTS:
+        # A day counts toward the minimum only if enough of it was observed.
+        # "Any minute at all" let fourteen nights holding one minute each score
+        # a perfect 100: SRI compares the minutes both days know about, and one
+        # minute always agrees with itself.
+        observed = [sum(1 for v in d if v is not None) for d in days]
+        for index, known in enumerate(observed):
+            if known < MIN_SRI_MINUTES:
+                days[index] = [None] * 1440
+        if sum(1 for known in observed if known >= MIN_SRI_MINUTES) < REGULARITY_MIN_NIGHTS:
             return None
         return stats.sleep_regularity_index(days)
 

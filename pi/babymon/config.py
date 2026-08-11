@@ -955,6 +955,23 @@ def _validate(cfg: Config) -> None:
     if cfg.sleep.sample_interval_s <= 0:
         errors.append("sleep.sample_interval_s must be positive")
 
+    # The bedtime window is what separates a nap from the night, and it is
+    # resolved onto the night's own date only if it opens at or after the day
+    # boundary. Open it earlier and it lands on the *following* evening, past
+    # the end of the night it was meant to divide.
+    for child in cfg.children:
+        boundary = child.day_boundary_hour
+        try:
+            opens = parse_hhmm(cfg.sleep.bedtime_window[0])
+        except (ValueError, IndexError):
+            continue
+        if opens.hour < boundary:
+            cfg.warn(
+                f"sleep.bedtime_window opens at {cfg.sleep.bedtime_window[0]}, before "
+                f"{child.name}'s day boundary of {boundary:02d}:00 — naps cannot be told "
+                "from the night, so the whole night is treated as nocturnal"
+            )
+
     try:
         cfg.scoring.normalised_weights()
     except ConfigError as exc:
