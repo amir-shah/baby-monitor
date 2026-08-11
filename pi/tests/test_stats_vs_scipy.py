@@ -94,7 +94,7 @@ def test_benjamini_hochberg_matches_scipy(rng):
         p_values = [rng.random() ** 2 for _ in range(m)]
         ours_q, ours_reject = S.benjamini_hochberg(p_values, 0.10)
         theirs_q = scipy_stats.false_discovery_control(p_values, method="bh")
-        worst_q = max(worst_q, max(abs(a - b) for a, b in zip(ours_q, theirs_q)))
+        worst_q = max(worst_q, max(abs(a - b) for a, b in zip(ours_q, theirs_q, strict=True)))
         assert ours_reject == [q <= 0.10 for q in theirs_q]
     assert worst_q < 1e-12, worst_q
 

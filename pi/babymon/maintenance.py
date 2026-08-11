@@ -16,7 +16,7 @@ from .timeutil import now_ms
 
 log = logging.getLogger(__name__)
 
-__all__ = ["run_maintenance", "prune", "backup"]
+__all__ = ["backup", "prune", "run_maintenance"]
 
 DAY_MS = 86_400_000
 
@@ -27,7 +27,7 @@ def run_maintenance(config: Config, repos: Repos) -> dict[str, int]:
     for name, task in (("prune", prune), ("backup", backup), ("optimise", optimise)):
         try:
             summary.update(task(config, repos))
-        except Exception:  # noqa: BLE001 - housekeeping is never worth a crash
+        except Exception:
             log.exception("%s failed", name)
     repos.syslog.add("info", "maintenance", "nightly maintenance finished", **summary)
     return summary

@@ -42,11 +42,11 @@ from ..models import Night, Tag, TagValueType
 from . import stats
 
 __all__ = [
-    "FactorResult",
-    "FactorAnalysis",
-    "analyse_factors",
     "DISCLAIMER",
     "EvidenceTier",
+    "FactorAnalysis",
+    "FactorResult",
+    "analyse_factors",
 ]
 
 #: Attached to every response. Deliberately plain.
@@ -351,7 +351,7 @@ def analyse_factors(
         # comparison found something. Warning that a null result might also be
         # a null result for the wrong reason is noise.
         if len(values) > 2 and result.p_value is not None and result.p_value <= 0.10:
-            lagged = flags[1:] + [False]
+            lagged = [*flags[1:], False]
             if min_per_group <= sum(lagged) <= len(lagged) - min_per_group:
                 lag = stats.permutation_test(
                     values,

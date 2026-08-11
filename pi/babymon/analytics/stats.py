@@ -31,36 +31,36 @@ from dataclasses import dataclass, field
 from math import erf, erfc, exp, fabs, lgamma, log, sqrt
 
 __all__ = [
-    "betainc",
-    "student_t_sf",
-    "norm_cdf",
-    "norm_sf",
-    "norm_ppf",
-    "mean",
-    "variance",
-    "stdev",
-    "median",
-    "percentile",
-    "iqr",
-    "rankdata",
-    "welch_t_test",
-    "mann_whitney_u",
-    "spearman",
-    "hedges_g",
-    "cliffs_delta",
-    "cliffs_delta_ci",
-    "permutation_test",
-    "bootstrap_ci",
+    "Z_95",
+    "EffectSize",
+    "TestResult",
     "benjamini_hochberg",
-    "shrink_effects",
-    "phi_coefficient",
-    "theil_sen",
+    "betainc",
+    "bootstrap_ci",
     "circular_mean",
     "circular_sd",
+    "cliffs_delta",
+    "cliffs_delta_ci",
+    "hedges_g",
+    "iqr",
+    "mann_whitney_u",
+    "mean",
+    "median",
+    "norm_cdf",
+    "norm_ppf",
+    "norm_sf",
+    "percentile",
+    "permutation_test",
+    "phi_coefficient",
+    "rankdata",
+    "shrink_effects",
     "sleep_regularity_index",
-    "TestResult",
-    "EffectSize",
-    "Z_95",
+    "spearman",
+    "stdev",
+    "student_t_sf",
+    "theil_sen",
+    "variance",
+    "welch_t_test",
 ]
 
 #: Two-sided 95% normal quantile.
@@ -235,7 +235,7 @@ def percentile(values: Sequence[float], q: float) -> float:
     if len(ordered) == 1:
         return ordered[0]
     position = (len(ordered) - 1) * q / 100.0
-    lower = int(math.floor(position))
+    lower = math.floor(position)
     upper = min(lower + 1, len(ordered) - 1)
     weight = position - lower
     return ordered[lower] * (1 - weight) + ordered[upper] * weight
@@ -612,7 +612,9 @@ def bootstrap_ci(
 # ---------------------------------------------------------------------------
 
 
-def benjamini_hochberg(p_values: Sequence[float], q: float = 0.10) -> tuple[list[float], list[bool]]:
+def benjamini_hochberg(
+    p_values: Sequence[float], q: float = 0.10
+) -> tuple[list[float], list[bool]]:
     """Benjamini-Hochberg FDR control.
 
     Returns per-test adjusted q-values and the rejection decisions.

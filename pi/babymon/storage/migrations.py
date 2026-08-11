@@ -24,8 +24,11 @@ Migration = tuple[int, str, Callable[[sqlite3.Connection], None]]
 _MIGRATIONS: list[Migration] = []
 
 
-def migration(version: int, name: str) -> Callable[[Callable[[sqlite3.Connection], None]], Callable[[sqlite3.Connection], None]]:
-    def decorate(fn: Callable[[sqlite3.Connection], None]) -> Callable[[sqlite3.Connection], None]:
+MigrationFn = Callable[[sqlite3.Connection], None]
+
+
+def migration(version: int, name: str) -> Callable[[MigrationFn], MigrationFn]:
+    def decorate(fn: MigrationFn) -> MigrationFn:
         if any(v == version for v, _, _ in _MIGRATIONS):
             raise RuntimeError(f"duplicate migration version {version}")
         _MIGRATIONS.append((version, name, fn))

@@ -26,7 +26,7 @@ from .timeutil import from_ms, parse_hhmm
 
 log = logging.getLogger(__name__)
 
-__all__ = ["send_notification", "in_quiet_hours"]
+__all__ = ["in_quiet_hours", "send_notification"]
 
 
 def in_quiet_hours(config: Config, ts_ms: int) -> bool:

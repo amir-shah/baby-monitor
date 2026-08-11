@@ -16,7 +16,17 @@ from .repo import (
 )
 
 __all__ = [
-    "Database", "open_database", "Repos", "ChildRepo", "TagRepo", "NoteRepo",
-    "SampleRepo", "EventRepo", "MediaRepo", "SegmentRepo", "NightRepo",
-    "SettingsRepo", "SystemLogRepo",
+    "ChildRepo",
+    "Database",
+    "EventRepo",
+    "MediaRepo",
+    "NightRepo",
+    "NoteRepo",
+    "Repos",
+    "SampleRepo",
+    "SegmentRepo",
+    "SettingsRepo",
+    "SystemLogRepo",
+    "TagRepo",
+    "open_database",
 ]

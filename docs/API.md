@@ -33,6 +33,13 @@ Two mechanisms, both optional-but-on-by-default (`api.auth.enabled`):
 The MJPEG/snapshot endpoints accept a short-lived signed `?t=` query token so
 they can be used from `<img>` tags that cannot set headers.
 
+| Method | Path | Notes |
+|---|---|---|
+| `POST` | `/api/auth/login` | `{"password": "..."}` — sets the `babymon_session` cookie. |
+| `POST` | `/api/auth/logout` | Clears the cookie. |
+| `GET` | `/api/auth/me` | `{authenticated, auth_required, principal, media_token, media_token_ttl_s}`. Requires auth — a signed-out caller gets 401, which is the dashboard's cue to show the login page. With `api.auth.enabled: false` it returns `authenticated: true, auth_required: false, principal: "anonymous"` and a null `media_token`. |
+| `GET` | `/api/auth/media-token` | Mints the signed `?t=` token for `<img>`/`<video>` sources. Same body as `/api/auth/me`; the token is in `media_token`, good for `media_token_ttl_s` seconds (3600). |
+
 ---
 
 ## System
@@ -62,6 +69,7 @@ they can be used from `<img>` tags that cannot set headers.
 ```jsonc
 {
   "ts_ms": 1770000000000,
+  "ts_iso": "2026-08-10T20:00:00-07:00",
   "child_id": 1,
   "night_of": "2026-08-10",
   "state": "asleep",              // absent|awake|settling|restless|asleep|unknown
@@ -76,7 +84,9 @@ they can be used from `<img>` tags that cannot set headers.
   "humidity_pct": 47.0,
   "camera_online": true,
   "audio_online": true,
-  "night_so_far": { "tst_min": 88.0, "awakenings": 1, "cry_events": 1 }
+  "env_online": true,
+  "night_so_far": { "tst_min": 88.0, "waso_min": 12.0, "awakenings": 1,
+                    "cry_events": 1, "quality_score": 82.4 }
 }
 ```
 
@@ -88,11 +98,12 @@ both the dashboard and the HomeKit bridge. Named events:
 | `state` | The `/api/state` body, emitted on every sample tick (default 15 s) and immediately on any state change. |
 | `event.open` | An `Event` object whose `end_ms` is null. |
 | `event.close` | The same `Event`, now closed. |
-| `note` | A `Note` object, on create/update/delete. |
+| `note` | `{"action": "created"\|"updated"\|"deleted"\|"homekit_tag", "note": {…}}`. The `Note` is wrapped so a client can tell a deletion from an edit; on `deleted` the object carries only `id`. |
 | `night` | A `Night` rollup, when recomputed. |
 | `motion` | `{"active": true\|false, "score": 0.12, "ts_ms": …}` — debounced motion, what the bridge maps onto the HomeKit motion sensor and uses to trigger HKSV. |
 | `sound` | `{"active": true\|false, "label":"cry", "confidence":0.87, "peak_dbfs":-21.0, "ts_ms": …}` — the bridge maps this onto the HomeKit occupancy/"sound detected" sensor. |
-| `heartbeat` | `{"ts_ms": …}` every 20 s so clients can detect a dead link. |
+| `system` | `{"event": "hksv_recording", …}` — service-level happenings worth showing on the timeline. Currently emitted by `POST /api/homekit/recording`. |
+| `heartbeat` | `{"ts_ms": …}` every `api.sse_heartbeat_s` seconds (default 20) so clients can detect a dead link. The first frame on a new connection also carries `"subscribed": true`. |
 
 Query params: `?child_id=`, `?types=state,motion,sound` to subscribe selectively.
 

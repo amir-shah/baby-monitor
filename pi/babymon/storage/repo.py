@@ -41,18 +41,18 @@ from .db import Database
 log = logging.getLogger(__name__)
 
 __all__ = [
+    "BUILTIN_TAGS",
     "ChildRepo",
-    "TagRepo",
-    "NoteRepo",
-    "SampleRepo",
     "EventRepo",
     "MediaRepo",
-    "SegmentRepo",
     "NightRepo",
+    "NoteRepo",
+    "Repos",
+    "SampleRepo",
+    "SegmentRepo",
     "SettingsRepo",
     "SystemLogRepo",
-    "Repos",
-    "BUILTIN_TAGS",
+    "TagRepo",
 ]
 
 
@@ -127,7 +127,9 @@ class ChildRepo:
         cols = ", ".join(fields)
         marks = ", ".join("?" for _ in fields)
         with self.db.transaction() as conn:
-            cur = conn.execute(f"INSERT INTO children ({cols}) VALUES ({marks})", tuple(fields.values()))
+            cur = conn.execute(
+                f"INSERT INTO children ({cols}) VALUES ({marks})", tuple(fields.values())
+            )
             child_id = int(cur.lastrowid or 0)
         result = self.get(child_id)
         assert result is not None
@@ -617,12 +619,10 @@ class NoteRepo:
             values = night.setdefault(r["slug"], [])
             if r["value_type"] == "bool":
                 values.append(1.0)
-            elif r["value_type"] == "time":
-                if r["value_min_local"] is not None:
-                    values.append(float(r["value_min_local"]))
-            elif r["value_type"] in ("number", "duration"):
-                if r["value_num"] is not None:
-                    values.append(float(r["value_num"]))
+            elif r["value_type"] == "time" and r["value_min_local"] is not None:
+                values.append(float(r["value_min_local"]))
+            elif r["value_type"] in ("number", "duration") and r["value_num"] is not None:
+                values.append(float(r["value_num"]))
 
         matrix: dict[str, dict[str, float | None]] = {night: {} for night in nights}
         for night, slugs in acc.items():
@@ -696,7 +696,11 @@ class SampleRepo:
             conn.executemany(
                 f"INSERT INTO samples ({cols}) VALUES ({marks}) "
                 "ON CONFLICT(child_id, ts_ms) DO UPDATE SET "
-                + ", ".join(f"{c} = excluded.{c}" for c in self._COLUMNS if c not in ("child_id", "ts_ms")),
+                + ", ".join(
+                    f"{c} = excluded.{c}"
+                    for c in self._COLUMNS
+                    if c not in ("child_id", "ts_ms")
+                ),
                 rows,
             )
         return len(rows)
@@ -992,7 +996,9 @@ class EventRepo:
         return events
 
     def update(self, event_id: int, **kwargs: Any) -> Event | None:
-        allowed = {"corrected_label", "severity", "label", "confidence", "end_ms", "acknowledged_ms"}
+        allowed = {
+            "corrected_label", "severity", "label", "confidence", "end_ms", "acknowledged_ms",
+        }
         sets = {k: v for k, v in kwargs.items() if k in allowed}
         if "acknowledged" in kwargs:
             sets["acknowledged_ms"] = now_ms() if kwargs["acknowledged"] else None
@@ -1113,7 +1119,9 @@ class MediaRepo:
     def for_event(self, event_id: int) -> list[Media]:
         return [
             self._row(r)
-            for r in self.db.query("SELECT * FROM media WHERE event_id = ? ORDER BY id", (event_id,))
+            for r in self.db.query(
+                "SELECT * FROM media WHERE event_id = ? ORDER BY id", (event_id,)
+            )
         ]
 
     def for_events(self, event_ids: Sequence[int]) -> dict[int, list[Media]]:

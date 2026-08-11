@@ -209,7 +209,7 @@ before installing `python3-picamera2`, delete it and start again.
 make dev                       # venv + editable install + dev tools
 make test
 cp config/babymon.example.yaml config/babymon.yaml
-pi/.venv/bin/python -m babymon run --config config/babymon.yaml
+pi/.venv/bin/python -m babymon --config config/babymon.yaml serve
 cd dashboard && npm run dev    # http://localhost:5173, proxies /api to :8080
 ```
 

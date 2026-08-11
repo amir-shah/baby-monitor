@@ -36,7 +36,7 @@ from .source import Frame
 
 log = logging.getLogger(__name__)
 
-__all__ = ["MotionDetector", "MotionReading", "MotionEvent"]
+__all__ = ["MotionDetector", "MotionEvent", "MotionReading"]
 
 #: Side of the spatial pooling block, in low-res pixels.
 POOL = 8

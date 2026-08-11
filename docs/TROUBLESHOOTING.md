@@ -743,7 +743,7 @@ sudoedit /etc/babymon/mediamtx.yml   # logLevel: debug
 # Run something in the foreground, without systemd in the way
 sudo systemctl stop babymon-api
 sudo -u babymon BABYMON_CONFIG=/etc/babymon/babymon.yaml \
-  /opt/babymon/venv/bin/babymon run
+  /opt/babymon/venv/bin/babymon serve
 ```
 
 Turn them all back down afterwards. DEBUG on the API writes a line per sample

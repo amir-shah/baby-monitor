@@ -23,12 +23,13 @@ import subprocess
 import wave
 from dataclasses import dataclass
 from pathlib import Path
+from typing import ClassVar
 
 import numpy as np
 
 log = logging.getLogger(__name__)
 
-__all__ = ["ClipWriter", "ClipResult"]
+__all__ = ["ClipResult", "ClipWriter"]
 
 
 @dataclass(slots=True)
@@ -44,7 +45,11 @@ class ClipWriter:
 
     #: Preference order when the configured encoder is unavailable. WAV is last
     #: and always works, at roughly twenty times the size.
-    _MIME = {"opus": "audio/ogg", "aac": "audio/mp4", "wav": "audio/wav"}
+    _MIME: ClassVar[dict[str, str]] = {
+        "opus": "audio/ogg",
+        "aac": "audio/mp4",
+        "wav": "audio/wav",
+    }
 
     def __init__(
         self,

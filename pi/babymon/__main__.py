@@ -89,7 +89,8 @@ def _setup(args: Any) -> tuple[Any, Any]:
 
 
 def _configure_logging(config: Any, verbose: bool) -> None:
-    level = logging.DEBUG if verbose else getattr(logging, config.logging.level.upper(), logging.INFO)
+    configured = getattr(logging, config.logging.level.upper(), logging.INFO)
+    level = logging.DEBUG if verbose else configured
     handlers: list[logging.Handler] = [logging.StreamHandler(sys.stdout)]
     if config.logging.file:
         handlers.append(logging.FileHandler(config.logging.file))
@@ -239,7 +240,7 @@ def _recompute(args: Any) -> int:
 
 
 def _export(args: Any) -> int:
-    config, repos = _setup(args)
+    _, repos = _setup(args)
     from .analytics.reports import export_matrix
 
     child = repos.children.default()
@@ -293,11 +294,12 @@ def _check(args: Any) -> int:
             print(f"FAIL  database integrity: {problems}")
             failures += 1
         else:
+            free = stats["disk_free_bytes"]
+            free_mib = f"{free // 1024**2}" if free else "?"
             print(f"ok    database (schema v{stats['schema_version']}, "
-                  f"{stats['size_bytes'] // 1024} KiB, "
-                  f"{stats['disk_free_bytes'] // 1024**2 if stats['disk_free_bytes'] else '?'} MiB free)")
+                  f"{stats['size_bytes'] // 1024} KiB, {free_mib} MiB free)")
         database.close()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"FAIL  database: {exc}")
         failures += 1
 
@@ -351,9 +353,10 @@ def _check(args: Any) -> int:
                 print(f"FAIL  camera {config.camera.source}: opened but produced no frames")
                 failures += 1
             else:
-                print(f"ok    camera {config.camera.source} ({frame.width}x{frame.height} analysis)")
+                print(f"ok    camera {config.camera.source} "
+                      f"({frame.width}x{frame.height} analysis)")
             source.close()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             print(f"FAIL  camera {config.camera.source}: {exc}")
             failures += 1
 

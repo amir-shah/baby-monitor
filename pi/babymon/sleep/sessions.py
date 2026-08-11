@@ -21,9 +21,11 @@ from ..storage import Repos
 from ..timeutil import (
     NightWindow,
     minutes_after_local_midnight,
-    night_of as compute_night_of,
     now_ms,
     shift_night,
+)
+from ..timeutil import (
+    night_of as compute_night_of,
 )
 from . import metrics as M
 
@@ -163,7 +165,9 @@ class NightBuilder:
         return {
             "tst_min": round(asleep_ms / 60000.0, 1),
             "awakenings": awakenings,
-            "cry_events": sum(v for k, v in counts.items() if k in ("cry", "scream", "whimper", "fuss")),
+            "cry_events": sum(
+                v for k, v in counts.items() if k in ("cry", "scream", "whimper", "fuss")
+            ),
             "noise_events": sum(
                 v for k, v in counts.items()
                 if k in ("cry", "scream", "whimper", "fuss", "talk", "cough", "noise", "door")
@@ -219,7 +223,11 @@ class NightBuilder:
             for n in nights
             if n.midpoint_ms is not None
         ]
-        midpoint_sd = stats.circular_sd(midpoints) if len(midpoints) >= REGULARITY_MIN_NIGHTS else None
+        midpoint_sd = (
+            stats.circular_sd(midpoints)
+            if len(midpoints) >= REGULARITY_MIN_NIGHTS
+            else None
+        )
 
         sri = self._sri(child, night_of)
         return sri, midpoint_sd

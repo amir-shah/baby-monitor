@@ -38,14 +38,14 @@ from .dsp import FrameAnalysis
 log = logging.getLogger(__name__)
 
 __all__ = [
+    "CLASS_TO_LABEL",
+    "YAMNET_INPUT_SAMPLES",
     "Classification",
     "Classifier",
-    "YamnetClassifier",
     "HeuristicClassifier",
     "NullClassifier",
+    "YamnetClassifier",
     "build_classifier",
-    "YAMNET_INPUT_SAMPLES",
-    "CLASS_TO_LABEL",
 ]
 
 #: YAMNet's input is exactly this many samples. Not a suggestion.

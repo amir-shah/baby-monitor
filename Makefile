@@ -74,7 +74,7 @@ backup: ## VACUUM INTO a dated copy of the database (safe while running)
 
 dev: $(VENV)/bin/activate ## Create the dev venv and install everything editable
 	@printf '\nvenv ready. Run the service against a local config with:\n'
-	@printf '  $(PY) -m babymon run --config config/babymon.yaml\n'
+	@printf '  $(PY) -m babymon --config config/babymon.yaml serve\n'
 	@printf 'and the dashboard dev server (proxies /api to :8080) with:\n'
 	@printf '  make -C $(DASHBOARD) dev   # or: cd dashboard && npm run dev\n\n'
 

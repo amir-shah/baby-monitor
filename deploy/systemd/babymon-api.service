@@ -34,9 +34,11 @@ WorkingDirectory=/var/lib/babymon
 EnvironmentFile=/etc/babymon/babymon.env
 EnvironmentFile=-/etc/babymon/babymon.local.env
 
-# `babymon run` starts the API and every sensing loop in one process; see
+# `babymon serve` starts the API and every sensing loop in one process; see
 # pi/babymon/__main__.py for the subcommand list if this ever changes.
-ExecStart=/opt/babymon/venv/bin/babymon run --config /etc/babymon/babymon.yaml
+# --config is a global option on the top-level parser, so it has to precede
+# the subcommand; argparse rejects it as an unrecognised argument otherwise.
+ExecStart=/opt/babymon/venv/bin/babymon --config /etc/babymon/babymon.yaml serve
 ExecReload=/bin/kill -HUP $MAINPID
 
 # SIGINT rather than SIGTERM: it is what the asyncio loop and the capture

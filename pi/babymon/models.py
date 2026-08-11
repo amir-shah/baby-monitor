@@ -14,26 +14,26 @@ from enum import StrEnum
 from typing import Any
 
 __all__ = [
-    "SleepState",
+    "CRY_LABELS",
+    "WAKE_LABELS",
+    "Child",
+    "Event",
     "EventKind",
     "EventLabel",
-    "Severity",
+    "LiveState",
+    "Media",
     "MediaKind",
+    "Night",
+    "NightStatus",
+    "Note",
+    "NoteTag",
+    "Sample",
+    "Severity",
+    "SleepSegment",
+    "SleepState",
+    "Tag",
     "TagCategory",
     "TagValueType",
-    "NightStatus",
-    "Child",
-    "Tag",
-    "NoteTag",
-    "Note",
-    "Sample",
-    "Event",
-    "Media",
-    "SleepSegment",
-    "Night",
-    "LiveState",
-    "WAKE_LABELS",
-    "CRY_LABELS",
 ]
 
 
@@ -142,7 +142,7 @@ class Severity(StrEnum):
     def rank(self) -> int:
         return {"info": 0, "notice": 1, "alert": 2}[self.value]
 
-    def at_least(self, other: "Severity | str") -> bool:
+    def at_least(self, other: Severity | str) -> bool:
         other = Severity(other)
         return self.rank >= other.rank
 
@@ -271,7 +271,9 @@ class NoteTag:
 
         match self.value_type:
             case TagValueType.TIME:
-                return format_hhmm(self.value_min_local) if self.value_min_local is not None else None
+                if self.value_min_local is None:
+                    return None
+                return format_hhmm(self.value_min_local)
             case TagValueType.DURATION:
                 return f"{self.value_num:g} min" if self.value_num is not None else None
             case TagValueType.NUMBER:
@@ -336,7 +338,7 @@ class Event:
     acknowledged_ms: int | None = None
     meta: dict[str, Any] = field(default_factory=dict)
     created_ms: int = 0
-    media: list["Media"] = field(default_factory=list)
+    media: list[Media] = field(default_factory=list)
 
     @property
     def is_open(self) -> bool:
@@ -447,7 +449,9 @@ class Night:
     def metric(self, name: str) -> float | None:
         """Look up an outcome metric by name, for the factor analysis."""
         value = getattr(self, name, None)
-        return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        return float(value)
 
 
 @dataclass(slots=True)

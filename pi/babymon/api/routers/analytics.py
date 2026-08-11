@@ -16,8 +16,7 @@ floor, and the disclaimer travels with every response.
 
 from __future__ import annotations
 
-import csv
-import io
+import json
 import re
 from typing import Annotated, Any
 
@@ -25,7 +24,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import PlainTextResponse
 
 from ...analytics import reports
-from ...analytics.correlate import DISCLAIMER, analyse_factors
+from ...analytics.correlate import analyse_factors
 from ...models import Tag
 from ..deps import ChildDep, ConfigDep, ReposDep
 from ..errors import BadRequest
@@ -145,24 +144,14 @@ def export(
 ) -> Any:
     """The full per-night factor matrix, so anyone can check the arithmetic."""
     window_days = days or config.analytics.default_window_days
-    columns, rows = reports.factor_table(repos, child, days=window_days)
     if format == "json":
-        return {
-            "child_id": child.id,
-            "days": window_days,
-            "columns": columns,
-            "rows": rows,
-            "disclaimer": DISCLAIMER,
-        }
+        return json.loads(reports.export_matrix(repos, child, days=window_days, fmt="json"))
 
-    buffer = io.StringIO()
-    writer = csv.DictWriter(buffer, fieldnames=columns, extrasaction="ignore")
-    writer.writeheader()
-    writer.writerows(rows)
+    body = reports.export_matrix(repos, child, days=window_days, fmt="csv")
     safe_name = re.sub(r"[^a-z0-9]+", "-", child.name.lower()).strip("-") or "child"
     filename = f"babymon-{safe_name}-{window_days}d.csv"
     return PlainTextResponse(
-        buffer.getvalue(),
+        body,
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

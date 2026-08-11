@@ -121,7 +121,9 @@ class VideoSource(ABC):
             "source": self.name,
             "healthy": self.healthy,
             "resolution": f"{self.width}x{self.height}",
-            "last_frame_age_s": None if frame is None else round((now_ms() - frame.ts_ms) / 1000, 1),
+            "last_frame_age_s": (
+                None if frame is None else round((now_ms() - frame.ts_ms) / 1000, 1)
+            ),
             "error": self._error,
         }
 
@@ -316,7 +318,7 @@ class Picamera2Source(VideoSource):
         try:
             array = self._camera.capture_array("lores")
             metadata = self._camera.capture_metadata()
-        except Exception as exc:  # noqa: BLE001 - libcamera raises a variety
+        except Exception as exc:
             self._error = str(exc)
             return None
         # Stride padding: the buffer is wider than requested. This slice both
@@ -345,7 +347,7 @@ class Picamera2Source(VideoSource):
             buffer = io.BytesIO()
             self._camera.capture_file(buffer, format="jpeg")
             return buffer.getvalue()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             log.debug("picamera2 snapshot failed: %s", exc)
             return super().snapshot_jpeg(width, height)
 
@@ -383,7 +385,7 @@ class Picamera2Source(VideoSource):
                         "AwbEnable": True,
                     }
                 )
-        except Exception as exc:  # noqa: BLE001 - a camera without AF raises here
+        except Exception as exc:
             log.debug("could not apply night controls: %s", exc)
 
     def close(self) -> None:
@@ -391,7 +393,7 @@ class Picamera2Source(VideoSource):
             try:
                 self._camera.stop()
                 self._camera.close()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
             self._camera = None
 
@@ -605,7 +607,7 @@ def with_retry(source: VideoSource, stop: threading.Event, max_delay_s: float = 
             source.open()
             delay = 1.0
             return
-        except Exception as exc:  # noqa: BLE001 - every backend raises differently
+        except Exception as exc:
             log.warning("camera %s unavailable (%s); retrying in %.0fs", source.name, exc, delay)
             if stop.wait(delay):
                 return

@@ -109,7 +109,7 @@ def _fetch_models(args: Any) -> int:
 
         classifier = YamnetClassifier(model_path, class_map_path)
         print(f"verified: {classifier.describe()}")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"warning: the model downloaded but could not be loaded: {exc}")
         print("install a TFLite runtime with `pip install ai-edge-litert`")
     return 0
@@ -211,7 +211,7 @@ def _demo_data(args: Any) -> int:
     import random
 
     from .config import load_config
-    from .models import EventKind, EventLabel, NightStatus, Severity, SleepSegment, SleepState
+    from .models import EventKind, EventLabel, Severity, SleepSegment, SleepState
     from .sleep.sessions import NightBuilder
     from .storage import Repos, open_database
     from .timeutil import NightWindow
@@ -257,11 +257,15 @@ def _demo_data(args: Any) -> int:
             span = int(rng.uniform(0.8, 2.6) * 3_600_000)
             if cursor + span >= wake:
                 break
-            segments.append(SleepSegment(0, child.id, key, cursor, cursor + span, SleepState.ASLEEP))
+            segments.append(
+                SleepSegment(0, child.id, key, cursor, cursor + span, SleepState.ASLEEP)
+            )
             cursor += span
             duration = int(rng.uniform(6, 22) * 60_000)
             segments.append(
-                SleepSegment(0, child.id, key, cursor, min(cursor + duration, wake), SleepState.AWAKE)
+                SleepSegment(
+                    0, child.id, key, cursor, min(cursor + duration, wake), SleepState.AWAKE
+                )
             )
             cursor = min(cursor + duration, wake)
             eid = repos.events.open(
@@ -311,7 +315,9 @@ def _demo_data(args: Any) -> int:
         if tags:
             repos.notes.create(
                 child_id=child.id, night_of=key, ts_ms=bedtime - 1_800_000,
-                body=rng.choice(["", "", "long day", "skipped the afternoon nap", "teething again"]),
+                body=rng.choice(
+                    ["", "", "long day", "skipped the afternoon nap", "teething again"]
+                ),
                 source="import", tags=tags,
             )
 

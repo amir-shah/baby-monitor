@@ -176,7 +176,9 @@ class SensingRuntime:
         self.repos.syslog.add("info", "service", "sensing service stopped")
 
     def _spawn(self, target: Any, name: str) -> None:
-        thread = threading.Thread(target=self._guard(target, name), name=f"babymon-{name}", daemon=True)
+        thread = threading.Thread(
+            target=self._guard(target, name), name=f"babymon-{name}", daemon=True
+        )
         thread.start()
         self._threads.append(thread)
 
@@ -184,7 +186,7 @@ class SensingRuntime:
         def wrapper() -> None:
             try:
                 target()
-            except Exception:  # noqa: BLE001 - a dead thread must be visible
+            except Exception:
                 log.exception("%s loop died", name)
                 self.repos.syslog.add("error", name, "loop died; see the journal for the traceback")
 
@@ -347,7 +349,10 @@ class SensingRuntime:
             )
             # The clip must include audio from before the event was recognised,
             # which is exactly why the ring buffer exists.
-            samples = self.capture.clip((event.end_ms or event.start_ms) + int(cfg.clips.post_s * 1000), duration)
+            # Reach back past the end of the event by the post-roll, so the
+            # clip covers the moment it stopped as well as the moment it began.
+            clip_end_ms = (event.end_ms or event.start_ms) + int(cfg.clips.post_s * 1000)
+            samples = self.capture.clip(clip_end_ms, duration)
             result = self.clips.write(
                 samples, night_of=night, event_id=event_id, ts_ms=event.start_ms
             )
@@ -524,7 +529,7 @@ class SensingRuntime:
             started = time.monotonic()
             try:
                 self._tick()
-            except Exception:  # noqa: BLE001 - one bad tick must not end the night
+            except Exception:
                 log.exception("tick failed")
             elapsed = time.monotonic() - started
             if self._stop.wait(max(0.5, interval - elapsed)):
@@ -577,7 +582,9 @@ class SensingRuntime:
                 state=self.state_machine.state,
             )
         )
-        self.bus.publish(Topic.STATE, self.live_state(self.child.id).to_dict(), child_id=self.child.id)
+        self.bus.publish(
+            Topic.STATE, self.live_state(self.child.id).to_dict(), child_id=self.child.id
+        )
 
     def _record_sleep_event(self, change: Any) -> None:
         """Log the structural moments of a night, so they appear on the timeline."""
@@ -622,7 +629,7 @@ class SensingRuntime:
             night = self.night_builder.rebuild(self.child, previous, finalise=True)
             if night is not None:
                 self.bus.publish(Topic.NIGHT, {"night_of": night.night_of}, child_id=self.child.id)
-        except Exception:  # noqa: BLE001
+        except Exception:
             log.exception("could not finalise the night of %s", previous)
         self._maintenance(new_night)
 
@@ -659,7 +666,7 @@ class SensingRuntime:
             from .maintenance import run_maintenance
 
             run_maintenance(self.config, self.repos)
-        except Exception:  # noqa: BLE001 - housekeeping must never break sensing
+        except Exception:
             log.exception("maintenance failed")
 
     def _notify(self, event: Any) -> None:
@@ -669,7 +676,7 @@ class SensingRuntime:
             from .notify import send_notification
 
             send_notification(self.config, event, self.child)
-        except Exception:  # noqa: BLE001
+        except Exception:
             log.exception("notification failed")
 
     # -- Runtime protocol ---------------------------------------------------
@@ -795,5 +802,8 @@ def _event_payload(event: Any) -> dict[str, Any]:
         "severity": str(event.severity),
         "peak_dbfs": event.peak_dbfs,
         "meta": event.meta,
-        "media": [{"id": m.id, "kind": str(m.kind), "duration_s": m.duration_s} for m in event.media],
+        "media": [
+            {"id": m.id, "kind": str(m.kind), "duration_s": m.duration_s}
+            for m in event.media
+        ],
     }

@@ -52,15 +52,15 @@ from ..models import (
 from ..timeutil import minutes_after_local_midnight
 
 __all__ = [
-    "NightMetrics",
-    "AgeBand",
-    "age_band",
-    "compute_metrics",
-    "score_night",
-    "ScoreBreakdown",
     "AASM_BANDS",
     "SCORE_BANDS",
+    "AgeBand",
+    "NightMetrics",
+    "ScoreBreakdown",
+    "age_band",
+    "compute_metrics",
     "score_band_label",
+    "score_night",
 ]
 
 MINUTE_MS = 60_000
@@ -419,7 +419,9 @@ def score_night(
                 "The recommended range is for a full 24 hours."
             )
     else:
-        notes.append("No birthdate is set, so sleep duration cannot be scored against an age range.")
+        notes.append(
+            "No birthdate is set, so sleep duration cannot be scored against an age range."
+        )
 
     # -- Efficiency ---------------------------------------------------------
     if metrics.sleep_efficiency is not None:
@@ -517,7 +519,9 @@ def _environment_subscore(metrics: NightMetrics, comfort: Any) -> float | None:
         parts.append(_band_subscore(metrics.temp_c_mean, low, high, slack=3.0))
     if metrics.humidity_mean is not None:
         parts.append(
-            _band_subscore(metrics.humidity_mean, comfort.humidity_min, comfort.humidity_max, slack=15.0)
+            _band_subscore(
+                metrics.humidity_mean, comfort.humidity_min, comfort.humidity_max, slack=15.0
+            )
         )
     return sum(parts) / len(parts) if parts else None
 

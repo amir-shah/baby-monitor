@@ -39,7 +39,7 @@ from ..models import SleepState
 
 log = logging.getLogger(__name__)
 
-__all__ = ["SleepStateMachine", "Observation", "StateChange"]
+__all__ = ["Observation", "SleepStateMachine", "StateChange"]
 
 
 @dataclass(slots=True)
@@ -196,18 +196,18 @@ class SleepStateMachine:
                 # an awakening. Anything shorter is an arousal and stays
                 # RESTLESS, which is what keeps the awakening count honest.
                 return self.awakening_min_ms
-            return int(30_000)
+            return 30_000
         if target is SleepState.ASLEEP:
             if current is SleepState.RESTLESS:
                 # Settling back after a stir is quick.
-                return int(90_000)
+                return 90_000
             # A first sleep onset needs a sustained quiet period.
             return self.onset_quiet_ms
         if target is SleepState.ABSENT:
-            return int(120_000)
+            return 120_000
         if target is SleepState.RESTLESS:
-            return int(45_000)
-        return int(60_000)
+            return 45_000
+        return 60_000
 
     def _transition(
         self, ts_ms: int, target: SleepState, confidence: float, reason: str

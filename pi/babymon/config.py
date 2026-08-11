@@ -31,7 +31,7 @@ import yaml
 
 from .timeutil import get_tz, parse_hhmm
 
-__all__ = ["Config", "load_config", "ConfigError"]
+__all__ = ["Config", "ConfigError", "load_config"]
 
 ENV_PREFIX = "BABYMON_"
 _INTERP_RE = re.compile(r"\$\{([A-Za-z0-9_.]+)\}")
@@ -206,11 +206,11 @@ class AudioConfig:
 
     @property
     def frame_samples(self) -> int:
-        return int(round(self.frame_s * self.sample_rate))
+        return round(self.frame_s * self.sample_rate)
 
     @property
     def hop_samples(self) -> int:
-        return int(round(self.hop_s * self.sample_rate))
+        return round(self.hop_s * self.sample_rate)
 
 
 @dataclass
@@ -260,10 +260,16 @@ class SleepConfig:
 
 @dataclass
 class ScoringConfig:
+    # These must stay in step with config/babymon.example.yaml and
+    # docs/ANALYTICS.md. Duration dominates, as it does in every consumer sleep
+    # tracker; the quarter of the score those trackers spend on sleep-stage
+    # composition is reallocated to timing regularity, which a camera and a
+    # microphone can actually observe. Environment is off by default because it
+    # measures the room rather than the child.
     weights: dict[str, float] = field(
         default_factory=lambda: {
-            "duration": 0.30, "efficiency": 0.25, "continuity": 0.20,
-            "timing": 0.15, "environment": 0.10,
+            "duration": 0.40, "efficiency": 0.20, "continuity": 0.20,
+            "timing": 0.20, "environment": 0.00,
         }
     )
     min_coverage: float = 0.6
@@ -499,7 +505,11 @@ class Config:
 # ---------------------------------------------------------------------------
 
 
-def load_config(path: str | os.PathLike[str] | None = None, *, environ: dict[str, str] | None = None) -> Config:
+def load_config(
+    path: str | os.PathLike[str] | None = None,
+    *,
+    environ: dict[str, str] | None = None,
+) -> Config:
     """Load, merge, interpolate and validate the configuration."""
     environ = os.environ if environ is None else environ
     path = path or environ.get(f"{ENV_PREFIX}CONFIG")
@@ -687,7 +697,7 @@ def _resolve_annotation(text: str) -> Any:
         _ANNOTATION_NS.update({"Any": Any, "list": list, "dict": dict, "str": str,
                                "int": int, "float": float, "bool": bool, "None": None})
     try:
-        return eval(text, _ANNOTATION_NS)  # noqa: S307 - our own annotations only
+        return eval(text, _ANNOTATION_NS)
     except Exception:
         return Any
 

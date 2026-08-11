@@ -25,29 +25,29 @@ from __future__ import annotations
 
 import datetime as dt
 import re
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Iterable, Iterator
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 __all__ = [
+    "DEFAULT_DAY_BOUNDARY_HOUR",
     "MS",
-    "now_ms",
-    "to_ms",
+    "NightKey",
+    "format_hhmm",
     "from_ms",
-    "local_dt",
-    "iso",
     "get_tz",
-    "night_of",
+    "iso",
+    "local_dt",
+    "local_window_bounds",
+    "minutes_after_local_midnight",
     "night_bounds",
     "night_dates",
+    "night_of",
+    "now_ms",
     "parse_date",
     "parse_hhmm",
-    "minutes_after_local_midnight",
-    "format_hhmm",
-    "local_window_bounds",
-    "NightKey",
-    "DEFAULT_DAY_BOUNDARY_HOUR",
+    "to_ms",
 ]
 
 MS = 1000
@@ -95,12 +95,12 @@ def system_tz() -> dt.tzinfo:
                 return ZoneInfo(name)
             except (ZoneInfoNotFoundError, ValueError):
                 continue
-    return dt.datetime.now().astimezone().tzinfo or dt.timezone.utc
+    return dt.datetime.now().astimezone().tzinfo or dt.UTC
 
 
 def _read_timezone_file(path: str) -> str | None:
     try:
-        with open(path, "r", encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             return fh.read().strip() or None
     except OSError:
         return None
@@ -127,7 +127,7 @@ def _read_localtime_link(path: str) -> str | None:
 
 def now_ms() -> int:
     """Current instant, Unix epoch milliseconds UTC."""
-    return int(dt.datetime.now(dt.timezone.utc).timestamp() * MS)
+    return int(dt.datetime.now(dt.UTC).timestamp() * MS)
 
 
 def to_ms(value: dt.datetime | dt.date | int | float) -> int:
@@ -148,7 +148,7 @@ def to_ms(value: dt.datetime | dt.date | int | float) -> int:
         return int(value.timestamp() * MS)
     if isinstance(value, dt.date):
         return int(
-            dt.datetime(value.year, value.month, value.day, tzinfo=dt.timezone.utc).timestamp() * MS
+            dt.datetime(value.year, value.month, value.day, tzinfo=dt.UTC).timestamp() * MS
         )
     raise TypeError(f"cannot convert {type(value).__name__} to epoch ms")
 
@@ -156,7 +156,7 @@ def to_ms(value: dt.datetime | dt.date | int | float) -> int:
 def from_ms(ms: int, tz: dt.tzinfo | str | None = None) -> dt.datetime:
     """Epoch milliseconds to an aware datetime (UTC unless ``tz`` is given)."""
     zone = get_tz(tz) if isinstance(tz, str) or tz is None else tz
-    return dt.datetime.fromtimestamp(ms / MS, tz=dt.timezone.utc).astimezone(zone)
+    return dt.datetime.fromtimestamp(ms / MS, tz=dt.UTC).astimezone(zone)
 
 
 def local_dt(ms: int, tz: dt.tzinfo | str | None) -> dt.datetime:
@@ -247,7 +247,7 @@ def _resolve_local(naive_local: dt.datetime, zone: dt.tzinfo) -> int:
     never near a transition in any real timezone anyway.
     """
     stamp = naive_local.timestamp()
-    resolved = dt.datetime.fromtimestamp(stamp, tz=dt.timezone.utc).astimezone(zone)
+    resolved = dt.datetime.fromtimestamp(stamp, tz=dt.UTC).astimezone(zone)
     if resolved.hour != naive_local.hour or resolved.minute != naive_local.minute:
         # Non-existent local time (spring-forward gap): take the instant the
         # gap ends, so the night still starts exactly once.
@@ -256,7 +256,7 @@ def _resolve_local(naive_local: dt.datetime, zone: dt.tzinfo) -> int:
 
 
 def _check_boundary(hour: int) -> None:
-    if not isinstance(hour, int) or not 0 <= hour <= 23:
+    if isinstance(hour, bool) or not isinstance(hour, int) or not 0 <= hour <= 23:
         raise ValueError(f"day_boundary_hour must be an int in 0..23, got {hour!r}")
 
 
@@ -296,7 +296,7 @@ def format_hhmm(minutes: float) -> str:
     may legitimately be negative (23:30 the previous evening recorded relative
     to the following day) or exceed 1440. Both wrap to a sensible clock face.
     """
-    total = int(round(minutes)) % (24 * 60)
+    total = round(minutes) % (24 * 60)
     return f"{total // 60:02d}:{total % 60:02d}"
 
 
@@ -400,7 +400,7 @@ class NightWindow:
         key: NightKey,
         tz_name: str | None,
         day_boundary_hour: int = DEFAULT_DAY_BOUNDARY_HOUR,
-    ) -> "NightWindow":
+    ) -> NightWindow:
         zone = get_tz(tz_name)
         start, end = night_bounds(key, zone, day_boundary_hour)
         return cls(key=key, start_ms=start, end_ms=end, timezone=str(zone))

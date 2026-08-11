@@ -188,11 +188,11 @@ scoring:
     environment: 0.00    # temperature and humidity (opt-in)
 ```
 
-Those are the values in `config/babymon.example.yaml`, which is what a fresh
-install gets. (The dataclass fallback in `config.py`, used only when no config
-file exists at all, is 0.30 / 0.25 / 0.20 / 0.15 / 0.10. If a score looks
-different from what you expect, check which one is in force via
-`GET /api/config`.) They need not sum to 1; they are normalised.
+Those are the values in `config/babymon.example.yaml` and also the built-in
+defaults in `babymon.config.ScoringConfig`, so an install with no config file
+at all scores identically to one using the shipped example. If a score looks
+different from what you expect, check which weights are actually in force via
+`GET /api/config`. They need not sum to 1; they are normalised.
 
 The mix follows what consumer trackers converge on — duration dominant, then
 continuity and efficiency — with **one substitution**. Those trackers spend

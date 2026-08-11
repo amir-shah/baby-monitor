@@ -29,14 +29,14 @@ from dataclasses import dataclass
 import numpy as np
 
 __all__ = [
-    "dbfs",
-    "a_weight_filter",
     "AWeighting",
-    "spectral_features",
-    "SpectralFeatures",
-    "NoiseFloor",
     "FrameAnalysis",
+    "NoiseFloor",
+    "SpectralFeatures",
+    "a_weight_filter",
     "analyse_frame",
+    "dbfs",
+    "spectral_features",
 ]
 
 #: Level reported for digital silence. Real silence is -inf dBFS, which breaks
@@ -242,7 +242,8 @@ class NoiseFloor:
             # Recomputing a percentile over ~600 floats twice a second is
             # cheaper than maintaining a sorted structure, and far easier to
             # reason about.
-            raw = float(np.percentile(np.fromiter(self._samples, dtype=np.float64), self.percentile))
+            history = np.fromiter(self._samples, dtype=np.float64)
+            raw = float(np.percentile(history, self.percentile))
             self._cached = min(self.max_dbfs, max(self.min_dbfs, raw))
             self._dirty = False
         return self._cached

@@ -18,6 +18,7 @@ Raspberry Pi.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import threading
 from collections import deque
@@ -30,7 +31,7 @@ from .models import LiveState
 
 log = logging.getLogger(__name__)
 
-__all__ = ["Topic", "Message", "EventBus", "Runtime", "ComponentHealth", "NullRuntime"]
+__all__ = ["ComponentHealth", "EventBus", "Message", "NullRuntime", "Runtime", "Topic"]
 
 
 class Topic(StrEnum):
@@ -88,21 +89,20 @@ class EventBus:
         if not subscribers:
             return
         for subscription in subscribers:
-            try:
+            # The loop may be closing, in which case the subscription is about
+            # to be torn down anyway and the message has nowhere to go.
+            with contextlib.suppress(RuntimeError):
                 loop.call_soon_threadsafe(subscription.offer, message)
-            except RuntimeError:
-                # The loop is closing; the subscription will be torn down.
-                pass
 
     def subscribe(
         self, topics: set[Topic] | None = None, child_id: int | None = None
-    ) -> "_Subscription":
+    ) -> _Subscription:
         subscription = _Subscription(self, topics, child_id, self._queue_size)
         with self._lock:
             self._subscribers.add(subscription)
         return subscription
 
-    def _unsubscribe(self, subscription: "_Subscription") -> None:
+    def _unsubscribe(self, subscription: _Subscription) -> None:
         with self._lock:
             self._subscribers.discard(subscription)
 
@@ -176,7 +176,7 @@ class _Subscription:
         if waiter is not None and not waiter.done():
             waiter.set_result(None)
 
-    def __enter__(self) -> "_Subscription":
+    def __enter__(self) -> _Subscription:
         return self
 
     def __exit__(self, *exc: object) -> None:
@@ -276,7 +276,7 @@ def periodic(
         while not stop.wait(0):
             try:
                 fn()
-            except Exception:  # noqa: BLE001 - a periodic task must not die
+            except Exception:
                 log.exception("periodic task %s failed", name)
             if stop.wait(interval_s):
                 break

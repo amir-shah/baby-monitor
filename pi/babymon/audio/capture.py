@@ -36,7 +36,7 @@ from ..timeutil import now_ms
 
 log = logging.getLogger(__name__)
 
-__all__ = ["AudioRing", "AudioCapture", "CaptureError", "list_devices"]
+__all__ = ["AudioCapture", "AudioRing", "CaptureError", "list_devices"]
 
 
 class CaptureError(RuntimeError):
@@ -236,7 +236,9 @@ class AudioCapture:
                 "-ac", str(self.channels), "-f", "s16le", "-",
             ]
         self._process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        self._reader = threading.Thread(target=self._read_subprocess, name="audio-reader", daemon=True)
+        self._reader = threading.Thread(
+            target=self._read_subprocess, name="audio-reader", daemon=True
+        )
         self._reader.start()
 
     def _read_subprocess(self) -> None:
@@ -264,7 +266,7 @@ class AudioCapture:
             try:
                 self._stream.stop()
                 self._stream.close()
-            except Exception:  # noqa: BLE001 - shutting down regardless
+            except Exception:
                 pass
             self._stream = None
         if self._process is not None:
@@ -315,11 +317,11 @@ class AudioCapture:
 
     @property
     def running(self) -> bool:
+        # Two distinct reasons not to be running, kept apart because the
+        # subprocess check only applies to one of the two backends.
         if not self._running:
             return False
-        if self._process is not None and self._process.poll() is not None:
-            return False
-        return True
+        return not (self._process is not None and self._process.poll() is not None)
 
     @property
     def healthy(self) -> bool:
@@ -355,7 +357,7 @@ class AudioCapture:
 def _has_sounddevice() -> bool:
     try:
         import sounddevice  # noqa: F401
-    except Exception:  # noqa: BLE001 - a broken PortAudio raises, not just ImportError
+    except Exception:
         return False
     return True
 
@@ -378,7 +380,7 @@ def list_devices() -> list[dict[str, Any]]:
                     }
                 )
         return devices
-    except Exception:  # noqa: BLE001 - fall through to arecord
+    except Exception:
         pass
     arecord = shutil.which("arecord")
     if arecord is None:

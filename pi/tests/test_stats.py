@@ -156,7 +156,7 @@ class TestEffectSizes:
         a, b = [5.0, 6, 7, 8, 9], [1.0, 2, 3, 4, 5]
         g = S.hedges_g(a, b)
         # The correction always shrinks toward zero.
-        assert 0 < g.value
+        assert g.value > 0
         assert g.magnitude == "large"
 
     def test_magnitude_thresholds(self):

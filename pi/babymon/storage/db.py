@@ -19,6 +19,7 @@ Design notes, since a 24/7 embedded logger has some sharp edges:
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import shutil
@@ -113,13 +114,13 @@ class Database:
             self._closed = True
             conns, self._all_conns = self._all_conns, []
         for conn in conns:
-            try:
+            # Best effort: a connection that is already broken cannot be made
+            # any more closed, and shutdown must not raise.
+            with contextlib.suppress(sqlite3.Error):
                 conn.close()
-            except sqlite3.Error:  # pragma: no cover - best effort on shutdown
-                pass
         self._local = threading.local()
 
-    def __enter__(self) -> "Database":
+    def __enter__(self) -> Database:
         return self
 
     def __exit__(self, *exc: object) -> None:

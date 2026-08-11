@@ -51,6 +51,7 @@ __all__ = [
     "ANALYSABLE_METRICS",
     "METRIC_UNITS",
     "Window",
+    "export_matrix",
     "factor_table",
     "patterns",
     "regularity",
@@ -619,3 +620,40 @@ def _round(value: float | None, digits: int = 2) -> float | None:
     if not math.isfinite(float(value)):
         return None
     return round(float(value), digits)
+
+
+def export_matrix(
+    repos: Repos, child: Child, *, days: int = 365, fmt: str = "csv"
+) -> str:
+    """Serialise the per-night factor matrix, so anyone can check the arithmetic.
+
+    Shared by ``GET /api/analytics/export`` and ``babymon export``: the file a
+    user downloads from the dashboard and the one they get from the command
+    line must be the same file, or the two will disagree the first time someone
+    compares them.
+    """
+    import csv
+    import io
+    import json
+
+    columns, rows = factor_table(repos, child, days=days)
+    if fmt == "json":
+        from .correlate import DISCLAIMER
+
+        return json.dumps(
+            {
+                "child_id": child.id,
+                "child": child.name,
+                "days": days,
+                "columns": columns,
+                "rows": rows,
+                "disclaimer": DISCLAIMER,
+            },
+            indent=2,
+            default=str,
+        )
+    buffer = io.StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=columns, extrasaction="ignore")
+    writer.writeheader()
+    writer.writerows(rows)
+    return buffer.getvalue()

@@ -381,7 +381,7 @@ make test
 make lint typecheck
 
 cp config/babymon.example.yaml config/babymon.yaml
-pi/.venv/bin/python -m babymon run --config config/babymon.yaml
+pi/.venv/bin/python -m babymon --config config/babymon.yaml serve
 
 cd dashboard && npm run dev    # :5173, proxies /api to :8080
 cd homekit   && npm run dev

@@ -64,7 +64,7 @@ from .dsp import FrameAnalysis
 
 log = logging.getLogger(__name__)
 
-__all__ = ["SoundEvent", "SoundEventDetector", "DetectorState"]
+__all__ = ["DetectorState", "SoundEvent", "SoundEventDetector"]
 
 
 @dataclass(slots=True)
