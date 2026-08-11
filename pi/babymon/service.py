@@ -172,7 +172,7 @@ class SensingRuntime:
 
         # Close anything the detectors left open so the log has no dangling rows.
         self.repos.events.close_stale(self.child.id, ts + 1, ts)
-        self._flush_segments(ts)
+        self._flush_segments(ts, final=True)
         self.repos.syslog.add("info", "service", "sensing service stopped")
 
     def _spawn(self, target: Any, name: str) -> None:
@@ -619,7 +619,7 @@ class SensingRuntime:
         """Cross the day boundary: close out yesterday, start today."""
         log.info("night boundary: %s -> %s", self._night_of, new_night)
         previous = self._night_of
-        self._flush_segments(ts)
+        self._flush_segments(ts, final=True)
         self._night_of = new_night
         self._segments = SegmentBuilder(self.child.id, new_night)
         self.state_machine.begin_night(ts)
@@ -633,22 +633,33 @@ class SensingRuntime:
             log.exception("could not finalise the night of %s", previous)
         self._maintenance(new_night)
 
-    def _flush_segments(self, ts: int) -> None:
+    def _flush_segments(self, ts: int, *, final: bool = False) -> None:
+        """Write the night's hypnogram to the database.
+
+        ``final`` only when the builder is about to be thrown away — at the day
+        boundary, or on shutdown. Every other flush takes a snapshot, because
+        finalising the segment the child is currently in would end the
+        hypnogram at that instant and record nothing more until they next moved.
+        A recompute of tonight, triggered from the dashboard, is exactly that
+        case: it used to cost the rest of the night, permanently, because the
+        write below replaces the night's rows wholesale.
+        """
         if self._segments is None:
             return
-        segments = self._segments.close(ts)
+        builder = self._segments
+        segments = builder.close(ts) if final else builder.snapshot(ts)
         if not segments:
             return
         from .models import SleepSegment
 
         self.repos.segments.replace_night(
             self.child.id,
-            self._segments.night_of,
+            builder.night_of,
             [
                 SleepSegment(
                     id=0,
                     child_id=self.child.id,
-                    night_of=self._segments.night_of,
+                    night_of=builder.night_of,
                     start_ms=s["start_ms"],
                     end_ms=s["end_ms"],
                     state=s["state"],

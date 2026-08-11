@@ -153,12 +153,21 @@ class ChildRepo:
             )
         return self.get(child_id)
 
-    def ensure_from_config(self, children_config: Sequence[Any]) -> list[Child]:
+    def ensure_from_config(
+        self, children_config: Sequence[Any], *, default_timezone: str | None = None
+    ) -> list[Child]:
         """Reconcile the ``children:`` config block into the database.
 
         Matches on name. Config is the source of truth for a child's settings,
         but never deletes a child, because their history is worth keeping even
         if they are removed from the config file.
+
+        ``default_timezone`` is ``site.timezone``, and a child without one of
+        their own inherits it. Leaving the column NULL instead would send every
+        night through the system zone, so a Pi still on UTC would bucket nights
+        on the wrong day, put bedtime in the wrong hour, and cut the evening in
+        the wrong place — all while the dashboard displayed the configured zone
+        and looked entirely consistent with itself.
         """
         result: list[Child] = []
         for cc in children_config:
@@ -166,7 +175,7 @@ class ChildRepo:
             payload = {
                 "birthdate": cc.birthdate,
                 "room": cc.room,
-                "timezone": cc.timezone,
+                "timezone": cc.timezone or default_timezone,
                 "day_boundary_hour": cc.day_boundary_hour,
                 "target_bedtime": cc.target_bedtime,
                 "target_waketime": cc.target_waketime,
@@ -1566,7 +1575,9 @@ class Repos:
     def bootstrap(self, config: Any) -> list[Child]:
         """First-run setup: seed built-in tags and reconcile the child list."""
         self.tags.seed_builtins()
-        return self.children.ensure_from_config(config.children)
+        return self.children.ensure_from_config(
+            config.children, default_timezone=config.timezone
+        )
 
     def night_of_for(self, child: Child, ts_ms: int) -> str:
         return compute_night_of(ts_ms, child.timezone, child.day_boundary_hour)

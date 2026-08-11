@@ -274,7 +274,15 @@ class SegmentBuilder:
 
     The hypnogram must have no gaps and no overlaps — the metrics assume it,
     and a gap silently becomes missing sleep. Segments are closed by the next
-    one starting, and the final one by :meth:`close`.
+    one starting; the one still in progress is included by :meth:`snapshot`.
+
+    The distinction between :meth:`snapshot` and :meth:`close` is the whole
+    point of this class. A night gets written to the database many times before
+    it ends — every recompute, every shutdown — and each of those writes
+    replaces the night's rows wholesale. Finalising the open segment on a write
+    would end the hypnogram at that instant and leave nothing recording until
+    the child next changed state, which for a sleeping child is hours. Reading
+    the buffer must therefore never disturb it.
     """
 
     child_id: int
@@ -301,7 +309,23 @@ class SegmentBuilder:
             "confidence": confidence,
         }
 
+    def snapshot(self, ts_ms: int) -> list[dict[str, Any]]:
+        """The hypnogram as it stands, with the open segment run up to ``ts_ms``.
+
+        Non-destructive: the builder keeps accumulating afterwards, and the
+        open segment is extended rather than replaced the next time this is
+        called. Callers persist the whole night at once, so a later snapshot
+        supersedes an earlier one and no duplicate rows can result.
+        """
+        if self._open is None or ts_ms <= self._open["start_ms"]:
+            return list(self.segments)
+        return [*self.segments, {**self._open, "end_ms": ts_ms}]
+
     def close(self, ts_ms: int) -> list[dict[str, Any]]:
+        """Finalise the open segment. Only for a builder about to be discarded.
+
+        Use :meth:`snapshot` for anything that intends to keep recording.
+        """
         if self._open is not None and ts_ms > self._open["start_ms"]:
             self._open["end_ms"] = ts_ms
             self.segments.append(self._open)

@@ -36,7 +36,7 @@ coverage was too thin — rather than emitting one with a caveat nobody reads.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from ..models import (
@@ -150,6 +150,8 @@ class NightMetrics:
     humidity_mean: float | None = None
 
     coverage: float = 0.0
+    #: The cut used to separate daytime naps from the night, if one was given.
+    night_start_ms: int | None = None
     awakening_times_ms: list[int] = None  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
@@ -165,8 +167,17 @@ def compute_metrics(
     awakening_min_min: float = 5.0,
     coverage: float = 0.0,
     overrides: dict[str, int | None] | None = None,
+    night_start_ms: int | None = None,
 ) -> NightMetrics:
     """Derive a night's metrics from its hypnogram, telemetry and event log.
+
+    ``night_start_ms`` is the earliest instant the *nocturnal* period may begin
+    — in practice the start of ``sleep.bedtime_window``. It matters because a
+    night_of key covers a whole local day: with the default noon boundary an
+    afternoon nap carries the same key as the night that follows it. Without
+    this cut the nap becomes the night's bedtime and sleep onset, the entire
+    afternoon between them is counted as wake after sleep onset, and every
+    metric that depends on those anchors is wrong by hours.
 
     ``overrides`` lets the user correct the four anchors by hand from the
     dashboard; a corrected anchor is honoured and everything downstream is
@@ -184,14 +195,18 @@ def compute_metrics(
         # worth keeping, but there is nothing to say about sleep structure.
         return metrics
 
+    ordered = _nocturnal_only(ordered, night_start_ms)
+    metrics.night_start_ms = night_start_ms
+
     in_bed = [s for s in ordered if s.state.counts_as_in_bed]
     if not in_bed:
         return metrics
 
-    metrics.bedtime_ms = overrides.get("bedtime_ms") or in_bed[0].start_ms
-    metrics.out_of_bed_ms = overrides.get("out_of_bed_ms") or in_bed[-1].end_ms
-
     asleep = [s for s in ordered if s.state.counts_as_sleep]
+    rest_start, rest_end = _rest_interval(ordered, asleep or in_bed)
+    metrics.bedtime_ms = overrides.get("bedtime_ms") or rest_start
+    metrics.out_of_bed_ms = overrides.get("out_of_bed_ms") or rest_end
+
     if not asleep:
         # In bed all night but never scored asleep. TIB is still meaningful.
         metrics.tib_min = _minutes(metrics.bedtime_ms, metrics.out_of_bed_ms)
@@ -275,6 +290,76 @@ def compute_metrics(
             metrics.motion_index = sum(s.motion or 0.0 for s in during) / len(during)
 
     return metrics
+
+
+def _rest_interval(
+    ordered: list[SleepSegment], anchors: list[SleepSegment]
+) -> tuple[int, int]:
+    """The in-bed run containing the night's sleep — bedtime to out of bed.
+
+    Not simply the first and last in-bed segments of the key. A child who plays
+    in their room after breakfast produces an in-bed segment hours after they
+    got up, and taking the last one would stretch time in bed across the
+    morning and halve the reported efficiency of a perfectly good night.
+
+    ABSENT is what breaks the run: an empty room means they are not in bed, so
+    the search stops there. What it cannot break on is the child being awake in
+    their own room before bedtime, because a monitor cannot tell that from a
+    child lying awake in bed — and treating a long pre-bedtime AWAKE run as
+    "not in bed" would erase exactly the bedtime struggles worth recording. The
+    defence against that case is the nocturnal cut, which is why the start of
+    ``sleep.bedtime_window`` is worth setting honestly.
+    """
+    first, last = anchors[0], anchors[-1]
+    index = {id(s): i for i, s in enumerate(ordered)}
+    start_i = index[id(first)]
+    end_i = index[id(last)]
+
+    while start_i > 0:
+        previous = ordered[start_i - 1]
+        if not previous.state.counts_as_in_bed:
+            break
+        if previous.end_ms < ordered[start_i].start_ms:
+            break  # a gap in the record is not evidence of being in bed
+        start_i -= 1
+    while end_i + 1 < len(ordered):
+        following = ordered[end_i + 1]
+        if not following.state.counts_as_in_bed:
+            break
+        if following.start_ms > ordered[end_i].end_ms:
+            break
+        end_i += 1
+
+    return ordered[start_i].start_ms, ordered[end_i].end_ms
+
+
+def _nocturnal_only(
+    ordered: list[SleepSegment], night_start_ms: int | None
+) -> list[SleepSegment]:
+    """Drop the daytime part of the night_of key, keeping the night itself.
+
+    Segments entirely before the cut are naps and belong to ``nap_min``, not to
+    this night's structure. One straddling the cut is clipped rather than
+    dropped, so an unusually early bedtime is shortened rather than lost.
+
+    If nothing survives, the cut is ignored and the whole key is used. A child
+    who genuinely went down before the configured bedtime window — an illness,
+    a disrupted day — should have their night measured, not discarded because
+    it started at an unexpected hour.
+    """
+    if night_start_ms is None:
+        return ordered
+    kept: list[SleepSegment] = []
+    for segment in ordered:
+        if segment.end_ms <= night_start_ms:
+            continue
+        if segment.start_ms < night_start_ms:
+            kept.append(replace(segment, start_ms=night_start_ms))
+        else:
+            kept.append(segment)
+    if not any(s.state.counts_as_in_bed for s in kept):
+        return ordered
+    return kept
 
 
 def _minutes(start: int | None, end: int | None) -> float | None:

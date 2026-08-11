@@ -20,6 +20,7 @@ from ..models import Child, Night, NightStatus, SleepState
 from ..storage import Repos
 from ..timeutil import (
     NightWindow,
+    local_window_bounds,
     minutes_after_local_midnight,
     now_ms,
     shift_night,
@@ -35,7 +36,11 @@ __all__ = ["NightBuilder"]
 
 #: Bumped whenever the metrics or the score change, so that
 #: ``nights_needing_recompute`` can find every stale row.
-COMPUTE_VERSION = 1
+#:
+#: 2 — the nocturnal cut. Before it, an afternoon nap under the same night_of
+#:     key became the night's bedtime and sleep onset, so every night with a
+#:     recorded nap has wrong anchors baked into it and must be rebuilt.
+COMPUTE_VERSION = 2
 
 #: Trailing window for the timing-consistency subscore.
 REGULARITY_WINDOW_NIGHTS = 14
@@ -65,17 +70,26 @@ class NightBuilder:
 
         existing = self.repos.nights.get(child.id, night_of)
         overrides = self._overrides(existing)
+        night_start_ms = self._nocturnal_start(child, night_of)
 
         coverage = self.repos.samples.coverage(
             child.id, window.start_ms, window.end_ms, self.config.sleep.sample_interval_s
         )
         # Coverage against a whole 24-hour window would never approach 1 for a
         # monitor that is only on at night. Measure it over the period the
-        # child was actually in bed, which is what the score cares about.
-        in_bed = [s for s in segments if s.state.counts_as_in_bed]
+        # child was actually in bed — and only the nocturnal part of it, or an
+        # afternoon nap stretches the window across the whole afternoon and the
+        # coverage figure collapses for a night that was fully recorded.
+        in_bed = [
+            s
+            for s in segments
+            if s.state.counts_as_in_bed and s.end_ms > night_start_ms
+        ] or [s for s in segments if s.state.counts_as_in_bed]
         if in_bed:
             coverage = self.repos.samples.coverage(
-                child.id, in_bed[0].start_ms, in_bed[-1].end_ms,
+                child.id,
+                max(in_bed[0].start_ms, night_start_ms),
+                in_bed[-1].end_ms,
                 self.config.sleep.sample_interval_s,
             )
 
@@ -86,6 +100,7 @@ class NightBuilder:
             awakening_min_min=self.config.sleep.awakening_min_min,
             coverage=coverage,
             overrides=overrides,
+            night_start_ms=night_start_ms,
         )
 
         age_days = child.age_days(computed.sleep_onset_ms or window.start_ms)
@@ -175,6 +190,23 @@ class NightBuilder:
         }
 
     # -- internals ----------------------------------------------------------
+
+    def _nocturnal_start(self, child: Child, night_of: str) -> int:
+        """Where the night begins, separating it from the day's naps.
+
+        A night_of key spans a whole local day, so with the default noon
+        boundary an afternoon nap sits under the same key as the night that
+        follows. This is the cut that keeps them apart, and it is deliberately
+        the same instant ``_nap_minutes`` uses: sleep before it is counted once
+        as a nap, sleep after it once as night sleep, and neither twice.
+        """
+        start, _ = local_window_bounds(
+            night_of,
+            (self.config.sleep.bedtime_window[0], self.config.sleep.bedtime_window[1]),
+            child.timezone,
+            child.day_boundary_hour,
+        )
+        return start
 
     @staticmethod
     def _overrides(existing: Night | None) -> dict[str, int | None]:
@@ -286,14 +318,9 @@ class NightBuilder:
             return 0.0
 
         # Anything asleep before the evening bedtime window opens is a nap.
-        from ..timeutil import local_window_bounds
-
-        bedtime_start, _ = local_window_bounds(
-            night_of,
-            (self.config.sleep.bedtime_window[0], self.config.sleep.bedtime_window[1]),
-            child.timezone,
-            child.day_boundary_hour,
-        )
+        # Same instant compute_metrics cuts the night at, so no minute of sleep
+        # is counted in both places.
+        bedtime_start = self._nocturnal_start(child, night_of)
         nap_ms = 0
         for segment in segments:
             if not segment.state.counts_as_sleep:
