@@ -1,0 +1,82 @@
+.hk {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  align-items: flex-start;
+}
+
+.hk__loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.hk__code {
+  /* The white ground of the code needs a little breathing room against a
+     near-black card, or it reads as a hole punched in the page. */
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: #ffffff;
+  box-shadow: var(--shadow-1);
+  flex: 0 0 auto;
+}
+
+.hk__details {
+  flex: 1 1 14rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.hk__pin-label,
+.hk__uri-label {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.hk__pin-value {
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-wide);
+  line-height: var(--leading-tight);
+  /* Selectable by design: on the phone showing this page, typing the digits
+     is the only way to pair. */
+  user-select: all;
+}
+
+.hk__facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.hk__facts dt {
+  color: var(--text-muted);
+}
+
+.hk__facts dd {
+  margin: 0;
+  color: var(--text);
+}
+
+.hk__uri-value {
+  display: block;
+  margin-top: var(--space-1);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface-inset);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.hk__note {
+  margin-top: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}

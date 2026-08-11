@@ -1,0 +1,145 @@
+/* Clock histogram and weekday comparison. */
+
+.patterns-card {
+  container-type: inline-size;
+}
+
+.patterns {
+  display: grid;
+  gap: var(--space-6);
+}
+
+@container (min-width: 44rem) {
+  .patterns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-5);
+  }
+}
+
+.pattern {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.pattern__title {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+}
+
+.pattern__note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
+  text-wrap: pretty;
+}
+
+.pattern__plot {
+  width: 100%;
+  overflow: hidden;
+}
+
+.pattern__svg {
+  display: block;
+  width: 100%;
+}
+
+.pattern__bar {
+  fill: var(--chart-sound);
+  stroke: none;
+}
+
+.pattern__axis {
+  stroke: var(--chart-axis);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.pattern__tick {
+  fill: var(--chart-label);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Weekday ------------------------------------------------------------ */
+
+.weekday {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.weekday__row {
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.weekday__label {
+  color: var(--text-secondary);
+}
+
+.weekday__track {
+  position: relative;
+  display: block;
+  height: 14px;
+  border-radius: var(--radius-xs);
+  background: var(--surface-inset);
+}
+
+.weekday__centre {
+  position: absolute;
+  inset-block: -2px;
+  left: 50%;
+  width: 1px;
+  background: var(--chart-axis);
+}
+
+.weekday__bar {
+  position: absolute;
+  inset-block: 3px;
+  border-radius: 2px;
+}
+
+/* Direction is carried by which side of the centre line the bar sits on, so
+   the two tones are reinforcement rather than the only signal. */
+.weekday__bar[data-side='up'] {
+  left: 50%;
+  background: var(--chart-sound);
+}
+
+.weekday__bar[data-side='down'] {
+  right: 50%;
+  background: var(--chart-temp);
+}
+
+.weekday__value {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+
+.weekday__n {
+  grid-column: 2 / -1;
+  color: var(--text-subtle);
+  font-size: var(--text-2xs);
+}
+
+@container (min-width: 26rem) {
+  .weekday__row {
+    grid-template-columns: 2.75rem minmax(0, 1fr) 5rem 4.5rem;
+  }
+
+  .weekday__n {
+    grid-column: auto;
+    text-align: end;
+  }
+}

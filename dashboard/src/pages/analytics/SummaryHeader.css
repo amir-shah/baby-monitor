@@ -1,0 +1,9 @@
+/* The headline row. Two-up at 390px, four-up once there is room. */
+
+.summary-card .stat-grid {
+  gap: var(--space-4);
+}
+
+.summary-card .stat__hint {
+  text-wrap: pretty;
+}

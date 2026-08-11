@@ -1,0 +1,17 @@
+.qr {
+  display: block;
+  border-radius: var(--radius-md);
+  /* The white ground is part of the code, so give it a hairline edge rather
+     than letting it float on a near-black card. */
+  box-shadow: 0 0 0 1px var(--border-strong);
+  max-width: 100%;
+  height: auto;
+}
+
+/* Windows high-contrast mode replaces colours wholesale, which would destroy
+   the code. Opt out: this image has to keep its own black and white. */
+@media (forced-colors: active) {
+  .qr {
+    forced-color-adjust: none;
+  }
+}

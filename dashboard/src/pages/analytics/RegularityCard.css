@@ -1,0 +1,124 @@
+/* Sleep regularity: one big number and a consistency strip. */
+
+.sri {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.sri__headline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-4);
+}
+
+.sri__label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.sri__basis {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.sri__strip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sri__strip-title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text-secondary);
+}
+
+.sri__axis {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+
+.sri__axis-line,
+.sri__axis-tick {
+  stroke: var(--chart-axis);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.sri__axis-label {
+  fill: var(--chart-label);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.sri__rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sri-row__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.sri-row__label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.sri-row__value {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+.sri-row__sd {
+  margin-inline-start: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-normal);
+}
+
+.sri-row__strip {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+
+.sri-row__track {
+  stroke: var(--chart-grid);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.sri-row__band {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
+  stroke-width: 1;
+}
+
+.sri-row__mean {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.sri__footnote {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
+  text-wrap: pretty;
+}

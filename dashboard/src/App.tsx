@@ -16,7 +16,8 @@ import { EventsPage } from './pages/EventsPage';
 import { LivePage } from './pages/LivePage';
 import { LoginPage } from './pages/LoginPage';
 import { NightPage } from './pages/NightPage';
-import { AnalyticsPage, NotesPage, SystemPage } from './pages/stubs';
+import { AnalyticsPage } from './pages/AnalyticsPage';
+import { NotesPage, SystemPage } from './pages/stubs';
 
 /** Route metadata read back by the shell for the header title. */
 interface RouteHandle {

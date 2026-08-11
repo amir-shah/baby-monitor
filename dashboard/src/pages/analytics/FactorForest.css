@@ -1,0 +1,564 @@
+/* ==========================================================================
+   The forest plot.
+
+   Colour is the last channel here, never the first. A row that could be
+   chance is grey *and* hollow *and* says "this could easily be chance" in the
+   sentence underneath. The evidence tier is a word, a three-block ladder and a
+   tint. Nothing on this card depends on being able to tell blue from orange.
+   ========================================================================== */
+
+.forest-card {
+  container-type: inline-size;
+}
+
+.forest {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* ---- The fixed note ----------------------------------------------------- */
+
+/* Pinned above the rows, not collapsible, not a tooltip. If a reader only
+   takes one sentence off this card it should be this one. */
+.forest__association {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-inline-start: 3px solid var(--accent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  text-wrap: pretty;
+}
+
+.forest__multiplicity {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.forest__disclaimer {
+  margin: 0;
+  padding-top: var(--space-3);
+  border-top: var(--border-width) solid var(--border-subtle);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}
+
+/* ---- Tier legend -------------------------------------------------------- */
+
+.tier-legend {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.tier-legend__item {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.tier-legend__item dd {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
+}
+
+@container (min-width: 34rem) {
+  .tier-legend__item {
+    grid-template-columns: 11rem minmax(0, 1fr);
+    align-items: baseline;
+    gap: var(--space-3);
+  }
+}
+
+/* ---- Tier badge --------------------------------------------------------- */
+
+.tier {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--surface-3);
+  color: var(--text-secondary);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-wide);
+  white-space: nowrap;
+}
+
+.tier__glyph {
+  font-size: 0.8em;
+  letter-spacing: -0.05em;
+}
+
+.tier[data-tier='suggestive'] {
+  border-color: var(--warning);
+  background: var(--warning-soft);
+  color: var(--warning-soft-fg);
+}
+
+.tier[data-tier='notable'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-soft-fg);
+}
+
+/* ---- Axis --------------------------------------------------------------- */
+
+.forest__group {
+  display: flex;
+  flex-direction: column;
+}
+
+.forest__axis {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+
+.forest__axis-line,
+.forest__axis-tick {
+  stroke: var(--chart-axis);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.forest__axis-tick.is-zero {
+  stroke: var(--text-muted);
+}
+
+.forest__zero {
+  stroke: var(--text-muted);
+  stroke-width: 1.5;
+  shape-rendering: crispEdges;
+}
+
+.forest__axis-label,
+.forest__axis-unit {
+  fill: var(--chart-label);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.forest__axis-unit {
+  fill: var(--text-subtle);
+}
+
+.forest__captions {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0 2px var(--space-2);
+  color: var(--text-subtle);
+  font-size: var(--text-2xs);
+}
+
+.forest__caption--end {
+  text-align: end;
+}
+
+/* ---- Rows --------------------------------------------------------------- */
+
+.forest__rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.forest-row {
+  display: grid;
+  gap: var(--space-1) var(--space-3);
+  grid-template-areas:
+    'head'
+    'strip'
+    'text'
+    'meta'
+    'flags';
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+/* A row that reached the top tier gets a rule as well as a tint, so it is
+   still marked out in greyscale and in forced-colours mode. */
+.forest-row[data-tier='notable'] {
+  border-inline-start: 3px solid var(--accent);
+  background: var(--surface-3);
+}
+
+.forest-row__head {
+  grid-area: head;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.forest-row__label {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
+}
+
+.forest-row__strip {
+  grid-area: strip;
+  min-width: 0;
+}
+
+.forest-row__text {
+  grid-area: text;
+  min-width: 0;
+}
+
+.forest-row__headline {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text);
+}
+
+.forest-row[data-tone='bad'] .forest-row__headline {
+  color: var(--danger);
+}
+
+.forest-row[data-tone='good'] .forest-row__headline {
+  color: var(--success);
+}
+
+.forest-row[data-tone='muted'] .forest-row__headline {
+  color: var(--text-secondary);
+}
+
+.forest-row__sentence {
+  margin: var(--space-1) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  text-wrap: pretty;
+}
+
+.forest-row__caution {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.forest-row__caveats {
+  margin: var(--space-2) 0 0;
+  padding-inline-start: 1.1em;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
+}
+
+.forest-row__meta {
+  grid-area: meta;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.forest-row__n {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text-secondary);
+}
+
+.forest-row__q {
+  margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.forest-row__flags {
+  grid-area: flags;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.forest-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border: var(--border-width) solid var(--warning);
+  border-radius: var(--radius-full);
+  background: var(--warning-soft);
+  color: var(--warning-soft-fg);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-snug);
+}
+
+.forest-flag__icon {
+  flex: none;
+}
+
+/* Wide enough for a proper forest: label column, plot column, numbers. */
+@container (min-width: 44rem) {
+  .forest-row {
+    grid-template-columns: 13rem minmax(8rem, 1fr) 8rem;
+    grid-template-areas:
+      'head strip meta'
+      'flags text meta';
+    align-items: start;
+    row-gap: var(--space-2);
+  }
+
+  .forest-row__head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+  }
+
+  .forest-row__meta {
+    flex-direction: column;
+    align-items: flex-end;
+    text-align: end;
+  }
+
+  .forest-row__q {
+    margin-inline-start: 0;
+  }
+
+  .forest-row__n-caption {
+    max-width: 7rem;
+  }
+}
+
+/* ---- The strip ---------------------------------------------------------- */
+
+.forest-strip {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+
+.forest-strip__grid {
+  stroke: var(--chart-grid);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.forest-strip__zero {
+  stroke: var(--text-muted);
+  stroke-width: 1.5;
+  shape-rendering: crispEdges;
+  opacity: 0.7;
+}
+
+.forest-strip__whisker,
+.forest-strip__cap {
+  stroke: var(--text-subtle);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+}
+
+.forest-strip__point {
+  fill: var(--text-subtle);
+  stroke: none;
+}
+
+/* Hollow marker for anything that has not separated from zero: the shape says
+   "uncertain" before the colour does. */
+.forest-strip__point.is-hollow {
+  fill: var(--surface);
+  stroke: var(--text-subtle);
+  stroke-width: 2;
+}
+
+.forest-row[data-tone='bad'] .forest-strip__whisker,
+.forest-row[data-tone='bad'] .forest-strip__cap {
+  stroke: var(--danger);
+}
+
+.forest-row[data-tone='bad'] .forest-strip__point {
+  fill: var(--danger);
+}
+
+.forest-row[data-tone='good'] .forest-strip__whisker,
+.forest-row[data-tone='good'] .forest-strip__cap {
+  stroke: var(--success);
+}
+
+.forest-row[data-tone='good'] .forest-strip__point {
+  fill: var(--success);
+}
+
+/* ---- Sections ----------------------------------------------------------- */
+
+.forest__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-4);
+  border-top: var(--border-width) solid var(--border-subtle);
+}
+
+.forest__section-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+.forest__section-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  text-wrap: pretty;
+}
+
+/* ---- Empty and quiet states --------------------------------------------- */
+
+/* The ordinary result. Framed as an outcome, not a failure: no alert colour,
+   no warning icon, no "no data" phrasing. */
+.forest__empty {
+  padding: var(--space-4) var(--space-2);
+  border: var(--border-width) dashed var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+}
+
+.forest__quiet {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.forest__quiet-title {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+}
+
+.forest__quiet-body {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+/* ---- Waiting list ------------------------------------------------------- */
+
+.waiting__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.waiting__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.waiting__icon {
+  grid-row: 1;
+  display: inline-flex;
+  color: var(--text-subtle);
+}
+
+.waiting__label {
+  grid-row: 1;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.waiting__progress {
+  grid-column: 2;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--surface-active);
+  overflow: hidden;
+}
+
+.waiting__bar {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  min-width: 2px;
+}
+
+.waiting__count {
+  grid-column: 2;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+@container (min-width: 34rem) {
+  .waiting__item {
+    grid-template-columns: auto minmax(6rem, 12rem) minmax(4rem, 1fr) auto;
+  }
+
+  .waiting__progress,
+  .waiting__count {
+    grid-column: auto;
+    grid-row: 1;
+  }
+
+  .waiting__count {
+    text-align: end;
+    white-space: nowrap;
+  }
+}
+
+/* ---- Loading ------------------------------------------------------------ */
+
+.forest__skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.forest__skeleton-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* ---- Forced colours ----------------------------------------------------- */
+
+@media (forced-colors: active) {
+  .forest-strip__point,
+  .forest-strip__point.is-hollow {
+    fill: canvas;
+    stroke: canvastext;
+  }
+
+  .forest-row[data-tier='notable'] {
+    border: 2px solid canvastext;
+  }
+}

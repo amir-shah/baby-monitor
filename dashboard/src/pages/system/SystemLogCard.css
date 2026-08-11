@@ -1,0 +1,104 @@
+.syslog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.syslog__loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.syslog__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 26rem;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-inset);
+}
+
+.syslog__row {
+  display: grid;
+  grid-template-columns: 1rem auto 1fr;
+  grid-template-areas:
+    'glyph time component'
+    'message message message';
+  gap: var(--space-1) var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: var(--border-width) solid var(--border-subtle);
+  font-size: var(--text-sm);
+}
+
+.syslog__row:last-child {
+  border-bottom: 0;
+}
+
+.syslog__glyph {
+  grid-area: glyph;
+  color: var(--severity-color, var(--text-muted));
+  line-height: var(--leading-normal);
+}
+
+/* The level is spelled out for assistive tech and small screens alike; the
+   glyph and the tint are the fast channel, never the only one. */
+.syslog__level {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.syslog__time {
+  grid-area: time;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.syslog__component {
+  grid-area: component;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  align-self: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.syslog__message {
+  grid-area: message;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.syslog__row--warning {
+  --severity-color: var(--warning);
+  background: color-mix(in srgb, var(--warning-soft) 55%, transparent);
+}
+
+.syslog__row--error {
+  --severity-color: var(--danger);
+  background: color-mix(in srgb, var(--danger-soft) 60%, transparent);
+}
+
+.syslog__row--debug .syslog__message {
+  color: var(--text-muted);
+}
+
+@media (min-width: 40rem) {
+  .syslog__row {
+    grid-template-columns: 1rem 7rem 9rem 1fr;
+    grid-template-areas: 'glyph time component message';
+    align-items: baseline;
+  }
+}

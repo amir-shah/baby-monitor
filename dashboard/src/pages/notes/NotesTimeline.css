@@ -1,0 +1,151 @@
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.timeline__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.timeline__heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  position: sticky;
+  /* Under the app header, so scanning a long journal never loses the night. */
+  top: var(--header-h);
+  z-index: var(--z-sticky);
+  padding: var(--space-2) 0;
+  background: var(--bg);
+}
+
+.timeline__night {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  margin: 0;
+}
+
+.timeline__night a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.timeline__night a:hover {
+  color: var(--text-link);
+  text-decoration: underline;
+}
+
+.timeline__date,
+.timeline__count {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.timeline__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.timeline__editor {
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--accent);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+/* -- One note ------------------------------------------------------------- */
+
+.note {
+  display: grid;
+  grid-template-columns: 1.25rem 1fr;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+.note__gutter {
+  display: flex;
+  justify-content: center;
+  padding-top: 0.45rem;
+}
+
+.note__dot {
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+}
+
+.note__main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.note__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.note__time {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.note__time--all {
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+}
+
+.note__source,
+.note__edited {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.note__tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.note__edit {
+  min-height: var(--tap-target);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--text-link);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.note__edit:hover {
+  background: var(--surface-hover);
+}
+
+.note__body {
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  overflow-wrap: anywhere;
+}
+
+.note__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}

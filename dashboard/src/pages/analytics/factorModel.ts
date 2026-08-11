@@ -135,7 +135,6 @@ if (import.meta.env.DEV) {
   ];
   const offenders = auditPhrases(generated);
   if (offenders.length > 0) {
-    // eslint-disable-next-line no-console
     console.error('[analytics] causal language in a generated phrase:\n' + offenders.join('\n'));
   }
 }

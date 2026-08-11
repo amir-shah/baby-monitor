@@ -1,0 +1,133 @@
+/* ==========================================================================
+   The actogram.
+
+   Sleep is a solid bar, restless is the same bar hatched. Two channels, so a
+   printed or greyscale copy still separates them. In the dark theme the bars
+   are the light element against a near-black ground rather than dark on
+   white — the convention is "high contrast block", not literally dark ink.
+   ========================================================================== */
+
+.acto {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.acto__plot {
+  width: 100%;
+  overflow: hidden;
+}
+
+.acto__svg {
+  display: block;
+  width: 100%;
+}
+
+.acto__row-bg {
+  fill: var(--surface-inset);
+}
+
+.acto__bar {
+  fill: var(--state-asleep);
+  stroke: none;
+}
+
+/* The hatch is painted through a <pattern>; the bar itself keeps a faint wash
+   underneath so a very narrow restless block is still visible. */
+.acto__bar--restless {
+  stroke: var(--state-restless);
+  stroke-width: 0.5;
+}
+
+.acto__hatch {
+  stroke: var(--state-restless);
+  stroke-width: 2;
+}
+
+.acto__grid {
+  stroke: var(--chart-grid);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.acto__midnight {
+  stroke: var(--chart-axis);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+/* The target bedtime is a reference, not data: dashed, and quiet enough that
+   it never competes with a real bar. */
+.acto__target {
+  stroke: var(--accent);
+  stroke-width: 1.25;
+  stroke-dasharray: 3 4;
+  opacity: 0.75;
+}
+
+.acto__axis-line {
+  stroke: var(--chart-axis);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.acto__tick,
+.acto__date {
+  fill: var(--chart-label);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.acto__date {
+  fill: var(--text-subtle);
+}
+
+/* ---- Legend ------------------------------------------------------------- */
+
+.acto__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.acto__key {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.acto__swatch {
+  display: inline-block;
+  width: 18px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.acto__swatch--asleep {
+  background: var(--state-asleep);
+}
+
+.acto__swatch--restless {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--state-restless) 0 2px,
+    transparent 2px 4px
+  );
+  outline: 1px solid var(--state-restless);
+  outline-offset: -1px;
+}
+
+.acto__swatch--target {
+  height: 0;
+  border-top: 2px dashed var(--accent);
+  border-radius: 0;
+}
+
+@media (forced-colors: active) {
+  .acto__bar {
+    fill: canvastext;
+  }
+}
