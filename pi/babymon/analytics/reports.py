@@ -51,12 +51,12 @@ __all__ = [
     "ANALYSABLE_METRICS",
     "METRIC_UNITS",
     "Window",
+    "factor_table",
+    "patterns",
+    "regularity",
     "resolve_window",
     "summary",
     "trends",
-    "regularity",
-    "patterns",
-    "factor_table",
 ]
 
 #: The outcome metrics a client may ask for. A whitelist rather than a getattr
@@ -362,8 +362,8 @@ def _sen_slope_ci(xs: list[float], ys: list[float]) -> tuple[float | None, float
     if total < 2:
         return None, None
     spread = stats.Z_95 * math.sqrt(n * (n - 1) * (2 * n + 5) / 18.0)
-    low_index = int(round((total - spread) / 2.0)) - 1
-    high_index = int(round((total + spread) / 2.0)) - 1
+    low_index = round((total - spread) / 2.0) - 1
+    high_index = round((total + spread) / 2.0) - 1
     low_index = min(max(low_index, 0), total - 1)
     high_index = min(max(high_index, 0), total - 1)
     return slopes[low_index], slopes[high_index]
@@ -441,7 +441,7 @@ def _epoch_row(repos: Repos, child: Child, key: str, start_ms: int) -> list[bool
         first = max(0, (segment.start_ms - start_ms) // MINUTE_MS)
         # Round the end up so a segment shorter than a minute still marks one.
         last = min(EPOCHS_PER_DAY, -(-(segment.end_ms - start_ms) // MINUTE_MS))
-        for index in range(int(first), int(last)):
+        for index in range(first, last):
             epochs[index] = asleep
     return epochs
 

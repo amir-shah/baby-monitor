@@ -65,6 +65,10 @@ __all__ = ["create_app"]
 API_PREFIX = "/api"
 _MUTATING = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
+#: (idempotency key, method, path) and the raw header list of a stored response.
+_Key = tuple[str, str, str]
+_Headers = list[tuple[bytes, bytes]]
+
 DESCRIPTION = """
 The HTTP contract for babymon. The Python service is the only component that
 touches the database; the dashboard and the HomeKit bridge are both clients of
@@ -95,9 +99,9 @@ class IdempotencyCache:
     def __init__(self, *, ttl_s: float = 600.0, max_entries: int = 512) -> None:
         self._ttl = ttl_s
         self._max = max_entries
-        self._entries: dict[tuple[str, str, str], tuple[float, int, bytes, list[tuple[bytes, bytes]]]] = {}
+        self._entries: dict[_Key, tuple[float, int, bytes, _Headers]] = {}
 
-    def get(self, key: tuple[str, str, str]) -> tuple[int, bytes, list[tuple[bytes, bytes]]] | None:
+    def get(self, key: _Key) -> tuple[int, bytes, _Headers] | None:
         entry = self._entries.get(key)
         if entry is None:
             return None
@@ -107,13 +111,7 @@ class IdempotencyCache:
             return None
         return status, body, headers
 
-    def put(
-        self,
-        key: tuple[str, str, str],
-        status: int,
-        body: bytes,
-        headers: list[tuple[bytes, bytes]],
-    ) -> None:
+    def put(self, key: _Key, status: int, body: bytes, headers: _Headers) -> None:
         if len(self._entries) >= self._max:
             self._evict()
         self._entries[key] = (time.monotonic(), status, body, headers)

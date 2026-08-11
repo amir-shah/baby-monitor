@@ -44,14 +44,14 @@ def health(request: Request) -> dict[str, Any]:
     try:
         for component in ctx.runtime.health():
             components[component.name] = component.to_dict()
-    except Exception as exc:  # noqa: BLE001 - health must answer even when broken
+    except Exception as exc:
         components["runtime"] = {"ok": False, "detail": f"health check failed: {exc}"}
 
     db_ok = True
     db_detail = ""
     try:
         ctx.repos.db.scalar("SELECT 1")
-    except Exception as exc:  # noqa: BLE001 - reported, not raised: see module docstring
+    except Exception as exc:
         db_ok = False
         db_detail = str(exc)
     components["db"] = {"ok": db_ok, "detail": db_detail}
@@ -160,7 +160,7 @@ def metrics(request: Request, repos: ReposDep) -> str:
                 f'babymon_component_up{{component="{component.name}"}} '
                 f"{1.0 if component.ok else 0.0}"
             )
-    except Exception:  # noqa: BLE001 - metrics must not fail on a broken sensor
+    except Exception:
         lines.append('babymon_component_up{component="runtime"} 0.0')
 
     return "\n".join(lines) + "\n"
@@ -199,7 +199,7 @@ def recompute(
         try:
             runtime.recompute_night(child.id, key)
             done.append(key)
-        except Exception as exc:  # noqa: BLE001 - one bad night must not stop the rest
+        except Exception as exc:
             failed.append({"night_of": key, "error": str(exc)})
     return {"child_id": child.id, "recomputed": done, "failed": failed,
             "from": start, "to": end}

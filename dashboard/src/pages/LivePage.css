@@ -1,0 +1,89 @@
+.live {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.live__col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-inline-size: 0;
+}
+
+/* Two columns once there is room. The order in the DOM is already the order a
+   phone wants — camera, state, sound, then room, tallies, events, actions — so
+   the wide layout is just a matter of letting the second group sit alongside. */
+@media (min-width: 60rem) {
+  .live {
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    gap: var(--space-5);
+  }
+
+  .live__banner {
+    grid-column: 1 / -1;
+  }
+}
+
+/* -- Reconnecting banner -------------------------------------------------- */
+
+.live__banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  border: var(--border-width) solid var(--warning);
+  background: var(--warning-soft);
+  color: var(--warning-soft-fg);
+  font-size: var(--text-sm);
+}
+
+.live__banner-text {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.live__banner strong {
+  font-weight: var(--weight-semibold);
+}
+
+.live__banner .spinner {
+  flex: 0 0 auto;
+  color: currentcolor;
+}
+
+.live__banner .btn {
+  flex: 0 0 auto;
+  color: currentcolor;
+}
+
+/* -- Bits ----------------------------------------------------------------- */
+
+/* The camera bleeds to the card's edge; the card's own clip rounds it. */
+.live__camera-card {
+  overflow: clip;
+}
+
+.live__link {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-link);
+  text-decoration: none;
+  /* Padded to a real tap target without changing the header's height. */
+  padding: var(--space-2);
+  margin: calc(var(--space-2) * -1);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+.live__link:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+}
+
+.live__muted {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}

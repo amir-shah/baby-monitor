@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactElement } from 'react';
 import {
   deriveAwakenings,
@@ -77,6 +77,12 @@ export interface NightTimelineProps {
   onCorrectEvent?: (event: BabyEvent, correctedLabel: string | null) => void;
   /** Id of the event whose correction is in flight, for the busy state. */
   correctingEventId?: number | null;
+  /**
+   * Draw at a fixed pixel width instead of measuring the container. Only
+   * needed where there is nothing to measure — a headless render, a print
+   * layout — the responsive path is the default.
+   */
+  width?: number;
   className?: string;
 }
 
@@ -113,6 +119,7 @@ export function NightTimeline({
   timezone,
   onCorrectEvent,
   correctingEventId,
+  width: fixedWidth,
   className,
 }: NightTimelineProps) {
   const [containerRef, size] = useResizeObserver<HTMLDivElement>();
@@ -123,7 +130,7 @@ export function NightTimeline({
   const titleId = useId();
 
   const hoverCapable = useHoverCapable();
-  const width = Math.max(0, size.width);
+  const width = Math.max(0, fixedWidth ?? size.width);
   const window_ = useMemo(() => timelineWindow(night), [night]);
 
   const x = useMemo<Scale | null>(() => {
@@ -236,8 +243,13 @@ export function NightTimeline({
       <StateLegend segments={night.segments} />
 
       {selectedLive ? (
-        <div className="night-timeline__details" ref={detailsRef} tabIndex={-1} role="group"
-          aria-label={`Details for ${clusterLabel(selectedLive, timezone)}`}>
+        <div
+          className="night-timeline__details"
+          ref={detailsRef}
+          tabIndex={-1}
+          role="group"
+          aria-label={`Details for ${clusterLabel(selectedLive, timezone)}`}
+        >
           <div className="night-timeline__details-head">
             <p className="night-timeline__details-title">
               {selectedLive.events.length === 1
@@ -658,7 +670,14 @@ function EventRail({
             />
             <EventGlyph kind={first.kind} x={cluster.x} y={cy} />
             {cluster.events.length > 1 ? (
-              <text className="night-timeline__marker-count" x={cluster.x} y={cy + 20} textAnchor="middle">
+              // Set as a superscript beside the glyph rather than under it:
+              // below the rail is outside the viewBox and gets clipped.
+              <text
+                className="night-timeline__marker-count"
+                x={cluster.x + 8}
+                y={cy - 4}
+                textAnchor="start"
+              >
                 {cluster.events.length}
               </text>
             ) : null}
@@ -938,21 +957,42 @@ function clusterLabel(cluster: EventCluster, timezone?: Timezone | null): string
     .join(', ')}`;
 }
 
+const HOVER_QUERY = '(hover: hover) and (pointer: fine)';
+
+/** Resolved once and cached: `matchMedia` is not free and this never varies. */
+let hoverMedia: MediaQueryList | null | undefined;
+
+function getHoverMedia(): MediaQueryList | null {
+  if (hoverMedia === undefined) {
+    hoverMedia =
+      typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+        ? window.matchMedia(HOVER_QUERY)
+        : null;
+  }
+  return hoverMedia;
+}
+
+function subscribeHover(onChange: () => void): () => void {
+  const media = getHoverMedia();
+  if (!media) return () => {};
+  media.addEventListener('change', onChange);
+  return () => media.removeEventListener('change', onChange);
+}
+
+function readHover(): boolean {
+  return getHoverMedia()?.matches ?? false;
+}
+
 /**
- * Whether the primary pointer can hover. A phone reports `hover: none`, and
- * showing a hover bubble there means a tooltip that appears under the thumb
- * that summoned it and then refuses to leave.
+ * Whether the primary pointer can hover. A phone reports `hover: none`, and a
+ * hover bubble there is a tooltip that appears under the thumb that summoned
+ * it and then refuses to leave.
+ *
+ * `useSyncExternalStore` rather than an effect: the media query is exactly the
+ * external store this API exists for, and it gets the value right on the very
+ * first render instead of flashing the wrong branch.
  */
 function useHoverCapable(): boolean {
-  const [capable, setCapable] = useState(false);
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) return;
-    const query = window.matchMedia('(hover: hover) and (pointer: fine)');
-    setCapable(query.matches);
-    const onChange = (event: MediaQueryListEvent): void => setCapable(event.matches);
-    query.addEventListener('change', onChange);
-    return () => query.removeEventListener('change', onChange);
-  }, []);
-  return capable;
+  return useSyncExternalStore(subscribeHover, readHover, () => false);
 }
 

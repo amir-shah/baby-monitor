@@ -12,7 +12,7 @@
  * created after this was written still gets the right control.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from './Button';
@@ -56,8 +56,21 @@ function selectionFromNote(note: Note | null | undefined, initial: readonly stri
   return selection;
 }
 
-export function NoteComposerDialog({
-  open,
+/**
+ * The dialog exists only while it is open, and is keyed by what it is editing.
+ *
+ * That is what keeps the draft honest: cancelling a note unmounts the form, so
+ * the next time someone reaches for it they get an empty one rather than
+ * yesterday's half-written thought — no reset effect, no stale state to
+ * forget about.
+ */
+export function NoteComposerDialog(props: NoteComposerDialogProps) {
+  if (!props.open) return null;
+  const seed = `${props.note?.id ?? 'new'}|${(props.initialTags ?? []).join(',')}`;
+  return <NoteComposerForm key={seed} {...props} />;
+}
+
+function NoteComposerForm({
   onClose,
   childId,
   nightOf,
@@ -68,28 +81,16 @@ export function NoteComposerDialog({
   const queryClient = useQueryClient();
   const toast = useToast();
 
-  const [body, setBody] = useState('');
-  const [selected, setSelected] = useState<Selection>({});
+  const [body, setBody] = useState(() => note?.body ?? '');
+  const [selected, setSelected] = useState<Selection>(() =>
+    selectionFromNote(note, initialTags ?? []),
+  );
   const [showAllTags, setShowAllTags] = useState(false);
-
-  const initialKey = (initialTags ?? []).join(',');
-
-  // Reset every time the dialog opens, so a cancelled note is not half-there
-  // the next time someone reaches for it.
-  useEffect(() => {
-    if (!open) return;
-    setBody(note?.body ?? '');
-    setSelected(selectionFromNote(note, initialTags ?? []));
-    setShowAllTags(false);
-    // `initialTags` is usually a literal; compare by content.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, note, initialKey]);
 
   const tagsQuery = useQuery({
     queryKey: ['tags'],
     queryFn: ({ signal }) => tagsApi.list({}, signal),
     staleTime: 5 * 60_000,
-    enabled: open,
   });
 
   const available = useMemo(() => {
@@ -161,7 +162,7 @@ export function NoteComposerDialog({
 
   return (
     <Modal
-      open={open}
+      open
       onClose={onClose}
       title={note ? 'Edit note' : 'Add a note'}
       description="Anything worth remembering about tonight. Tags are what the analysis reads."

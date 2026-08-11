@@ -305,6 +305,6 @@ def test_seeded_timestamps_land_on_the_expected_night(tmp_path: Path) -> None:
     harness = build(tmp_path)
     # Hour 8 on the night clock is 20:00 local, which must belong to that night.
     evening = harness.at("2026-08-10", 8)
-    assert to_ms(dt.datetime.fromtimestamp(evening / 1000, dt.timezone.utc)) == evening
+    assert to_ms(dt.datetime.fromtimestamp(evening / 1000, dt.UTC)) == evening
     start, end = harness.night_bounds("2026-08-10")
     assert start < evening < end

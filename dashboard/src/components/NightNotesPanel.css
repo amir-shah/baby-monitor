@@ -1,0 +1,126 @@
+/* Inline, editable notes for one night. */
+
+.night-notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  align-items: flex-start;
+}
+
+.night-notes > .btn {
+  align-self: flex-start;
+}
+
+.night-notes__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.night-notes__item + .night-notes__item {
+  border-top: var(--border-width) solid var(--border-subtle);
+  padding-top: var(--space-4);
+}
+
+.night-notes__note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.night-notes__note-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.night-notes__time {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text);
+}
+
+.night-notes__source {
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+}
+
+.night-notes__body {
+  margin: 0;
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  color: var(--text-secondary);
+  /* Notes are typed at 1am; keep whatever line breaks were meant. */
+  white-space: pre-wrap;
+}
+
+.night-notes__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* ---- Form --------------------------------------------------------------- */
+
+.night-notes__form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.night-notes__label {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.night-notes__textarea,
+.night-notes__text {
+  width: 100%;
+  min-height: var(--tap-target);
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+}
+
+.night-notes__textarea {
+  min-height: 5rem;
+}
+
+.night-notes__tag-input {
+  display: flex;
+  gap: var(--space-2);
+  align-items: stretch;
+}
+
+.night-notes__tag-input .night-notes__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.night-notes__tag-input .btn {
+  flex: none;
+}
+
+.night-notes__form-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}

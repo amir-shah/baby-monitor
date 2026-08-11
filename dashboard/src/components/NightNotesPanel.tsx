@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { notes as notesApi, tags as tagsApi } from '../lib/api';
 import { formatClock, slugify, titleCase } from '../lib/format';
@@ -229,11 +229,11 @@ function NoteForm({
         onSubmit({ body: body.trim(), tags: all });
       }}
     >
-      <label className="field__label" htmlFor="night-note-body">
+      <label className="night-notes__label" htmlFor={bodyId}>
         Note
       </label>
       <textarea
-        id="night-note-body"
+        id={bodyId}
         className="night-notes__textarea"
         value={body}
         rows={3}
@@ -241,15 +241,15 @@ function NoteForm({
         onChange={(event) => setBody(event.target.value)}
       />
 
-      <label className="field__label" htmlFor="night-note-tag">
+      <label className="night-notes__label" htmlFor={tagId}>
         Tags
       </label>
       <div className="night-notes__tag-input">
         <input
-          id="night-note-tag"
+          id={tagId}
           className="night-notes__text"
           value={tagText}
-          list="night-note-tag-options"
+          list={optionsId}
           placeholder="dessert before bed"
           autoComplete="off"
           onChange={(event) => setTagText(event.target.value)}
@@ -261,7 +261,7 @@ function NoteForm({
             addTag();
           }}
         />
-        <datalist id="night-note-tag-options">
+        <datalist id={optionsId}>
           {suggestions.map((label) => (
             <option key={label} value={label} />
           ))}

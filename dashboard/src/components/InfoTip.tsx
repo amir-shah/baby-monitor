@@ -17,6 +17,14 @@ export interface InfoTipProps {
   className?: string;
 }
 
+/**
+ * `useLayoutEffect` warns when it runs through the server renderer, and the
+ * placement pass genuinely has nothing to do there. Falling back to
+ * `useEffect` off the browser keeps a headless render silent without changing
+ * a thing in the browser, where the bubble must be positioned before paint.
+ */
+const useBrowserLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
 /** Distance from the trigger to the bubble, and from the bubble to the edge. */
 const GAP = 8;
 const MARGIN = 8;
@@ -67,7 +75,7 @@ export function InfoTip({ children, term, title, size = 16, className }: InfoTip
     setStyle({ left: Math.round(left), top: Math.round(top), width: Math.round(width) });
   }, []);
 
-  useLayoutEffect(() => {
+  useBrowserLayoutEffect(() => {
     if (!open) return;
     place();
   }, [open, place]);

@@ -112,14 +112,22 @@ export function SoundMeter({
         ) : null}
       </div>
 
+      {/* `meter` requires an `aria-valuenow`, so with no reading it becomes a
+          plain labelled image rather than a meter that lies about its value. */}
       <div
         className="meter__bar"
-        role="meter"
-        aria-label="Sound level relative to the noise floor"
-        aria-valuemin={-10}
-        aria-valuemax={40}
-        aria-valuenow={excess === null ? undefined : Math.round(Math.min(40, Math.max(-10, excess)))}
-        aria-valuetext={valueText}
+        role={excess === null ? 'img' : 'meter'}
+        aria-label={
+          excess === null ? valueText : 'Sound level relative to the noise floor'
+        }
+        {...(excess === null
+          ? {}
+          : {
+              'aria-valuemin': -10,
+              'aria-valuemax': 40,
+              'aria-valuenow': Math.round(Math.min(40, Math.max(-10, excess))),
+              'aria-valuetext': valueText,
+            })}
       >
         <div className="meter__track">
           {dbfs === null ? null : (

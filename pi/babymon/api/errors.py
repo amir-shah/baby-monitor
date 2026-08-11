@@ -31,11 +31,11 @@ log = logging.getLogger(__name__)
 
 __all__ = [
     "ApiError",
-    "BadRequest",
     "AuthRequired",
+    "BadRequest",
+    "Conflict",
     "Forbidden",
     "NotFound",
-    "Conflict",
     "RateLimited",
     "Unavailable",
     "error_body",

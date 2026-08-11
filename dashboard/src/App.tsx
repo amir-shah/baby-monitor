@@ -12,15 +12,11 @@ import {
 import type { RouteObject } from 'react-router-dom';
 import { AppShell, Button, Card, EmptyState, ErrorState } from './components';
 import { setUnauthorizedHandler } from './lib/api';
+import { EventsPage } from './pages/EventsPage';
+import { LivePage } from './pages/LivePage';
 import { LoginPage } from './pages/LoginPage';
-import {
-  AnalyticsPage,
-  EventsPage,
-  LivePage,
-  NightPage,
-  NotesPage,
-  SystemPage,
-} from './pages/stubs';
+import { NightPage } from './pages/NightPage';
+import { AnalyticsPage, NotesPage, SystemPage } from './pages/stubs';
 
 /** Route metadata read back by the shell for the header title. */
 interface RouteHandle {

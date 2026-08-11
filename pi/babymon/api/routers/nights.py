@@ -93,7 +93,9 @@ def get_night(
     tz = child.timezone
     return {
         "night": NightOut.from_model(night),
-        "segments": [SegmentOut.from_model(s) for s in repos.segments.for_night(child.id, night_of)],
+        "segments": [
+            SegmentOut.from_model(s) for s in repos.segments.for_night(child.id, night_of)
+        ],
         "events": [EventOut.from_model(e, tz) for e in events],
         "notes": [NoteOut.from_model(n, tz) for n in notes],
         "series": repos.samples.downsample(child.id, start_ms, end_ms, series_bucket_s),
@@ -178,7 +180,7 @@ def _recompute(repos: Any, runtime: Any, child: Child, night_of: str) -> None:
     """
     try:
         runtime.recompute_night(child.id, night_of)
-    except Exception as exc:  # noqa: BLE001 - see docstring
+    except Exception as exc:
         repos.syslog.add(
             "warning", "api", f"recompute of {night_of} failed", error=str(exc),
             child_id=child.id,

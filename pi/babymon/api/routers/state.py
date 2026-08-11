@@ -84,7 +84,7 @@ def _live_state(repos: Repos, runtime: Any, child: Child) -> LiveState:
     """The runtime's view, falling back to the last stored sample."""
     try:
         state = runtime.live_state(child.id)
-    except Exception:  # noqa: BLE001 - a broken sensor degrades, never 500s
+    except Exception:
         log.exception("runtime.live_state failed for child %s", child.id)
         state = None
     if state is None or not state.night_of:
@@ -216,7 +216,7 @@ def snapshot(
     """
     try:
         frame = runtime.snapshot(width, height)
-    except Exception as exc:  # noqa: BLE001 - a camera fault is not a server fault
+    except Exception as exc:
         log.exception("snapshot failed")
         raise Unavailable(f"The camera could not produce a frame: {exc}") from exc
     if not frame:
@@ -241,7 +241,7 @@ def mjpeg(
     """A ``multipart/x-mixed-replace`` preview for the dashboard."""
     try:
         chunks = runtime.mjpeg_stream(fps, width)
-    except Exception as exc:  # noqa: BLE001 - as above
+    except Exception as exc:
         log.exception("mjpeg stream failed to start")
         raise Unavailable(f"The camera preview could not start: {exc}") from exc
     return StreamingResponse(

@@ -574,14 +574,17 @@ export function timelineSummary(night: NightDetail, tz?: Timezone | null): strin
     finalWakeMs: night.final_wake_ms,
   });
   if (awakenings.length === 0) {
-    parts.push('No wakings of five minutes or more.');
+    parts.push('No wakings of five minutes or more are marked.');
   } else {
     const listed = awakenings
       .slice(0, 8)
       .map((waking) => `${clock(waking.start_ms)} for ${formatDuration(waking.minutes)}`)
       .join('; ');
+    // "Marked", not "there were": this counts the ticks drawn on the band,
+    // which is a derivation from the segments. The tally in the header is the
+    // server's own and is the number to quote.
     parts.push(
-      `${awakenings.length} ${awakenings.length === 1 ? 'waking' : 'wakings'}: ${listed}${
+      `${awakenings.length} ${awakenings.length === 1 ? 'waking is' : 'wakings are'} marked: ${listed}${
         awakenings.length > 8 ? '; and more' : ''
       }.`,
     );

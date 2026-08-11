@@ -49,9 +49,9 @@ from .errors import AuthRequired, RateLimited
 log = logging.getLogger(__name__)
 
 __all__ = [
+    "SESSION_COOKIE",
     "AuthManager",
     "Principal",
-    "SESSION_COOKIE",
     "require_auth",
     "require_media_access",
     "router",
@@ -92,7 +92,9 @@ class LoginThrottle:
     once its penalty has elapsed and the table is swept when it grows.
     """
 
-    def __init__(self, *, free_attempts: int = _FREE_ATTEMPTS, max_backoff_s: float = _MAX_BACKOFF_S) -> None:
+    def __init__(
+        self, *, free_attempts: int = _FREE_ATTEMPTS, max_backoff_s: float = _MAX_BACKOFF_S
+    ) -> None:
         self._free = free_attempts
         self._max = max_backoff_s
         self._lock = threading.Lock()

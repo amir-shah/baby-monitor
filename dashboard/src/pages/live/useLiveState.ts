@@ -13,7 +13,7 @@
  * dashboard makes no requests at all.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { children as childrenApi, state as stateApi, system } from '../../lib/api';
 import type { StreamStatus } from '../../lib/api';
@@ -45,22 +45,42 @@ export interface SoundPoint {
  * seed it from that would not mean pulling the whole night's series — so
  * losing it on every route change would mean a blank chart for the first
  * minute after every visit, which is exactly when someone is looking.
+ *
+ * Modelled as a tiny external store and read with `useSyncExternalStore`: the
+ * buffer genuinely lives outside React (it outlives the component), and going
+ * through the store keeps every reader consistent instead of each holding its
+ * own copy in state.
  */
 const soundHistory = new Map<string, SoundPoint[]>();
+const historyListeners = new Set<() => void>();
+
+/** Shared empty array, so an untouched key returns a stable snapshot. */
+const NO_POINTS: SoundPoint[] = [];
+
+function subscribeHistory(listener: () => void): () => void {
+  historyListeners.add(listener);
+  return () => {
+    historyListeners.delete(listener);
+  };
+}
 
 function historyKey(childId: number | undefined): string {
   return childId === undefined ? 'default' : String(childId);
 }
 
-function appendPoint(key: string, point: SoundPoint): SoundPoint[] {
-  const previous = soundHistory.get(key) ?? [];
+function readHistory(key: string): SoundPoint[] {
+  return soundHistory.get(key) ?? NO_POINTS;
+}
+
+function appendPoint(key: string, point: SoundPoint): void {
+  const previous = readHistory(key);
   const last = previous.at(-1);
   // The same tick can arrive twice (a poll racing an SSE push).
-  if (last && last.ts >= point.ts) return previous;
+  if (last && last.ts >= point.ts) return;
   const cutoff = point.ts - SOUND_WINDOW_MS;
   const next = [...previous, point].filter((entry) => entry.ts >= cutoff).slice(-SOUND_MAX_POINTS);
   soundHistory.set(key, next);
-  return next;
+  for (const listener of historyListeners) listener();
 }
 
 // ---------------------------------------------------------------------------
@@ -128,7 +148,12 @@ export interface LiveData {
   soundHistory: SoundPoint[];
 }
 
-export function useLiveState(): LiveData {
+/**
+ * @param now A ticking clock from {@link useNow}. Passed in rather than read
+ *   from `Date.now()` mid-render so the hook stays pure and every consumer of
+ *   the page agrees on what "now" is.
+ */
+export function useLiveState(now: number): LiveData {
   const queryClient = useQueryClient();
 
   // -- Which child ---------------------------------------------------------
@@ -193,26 +218,22 @@ export function useLiveState(): LiveData {
   // -- Sound history -------------------------------------------------------
 
   const key = historyKey(child?.id);
-  const [history, setHistory] = useState<SoundPoint[]>(() => soundHistory.get(key) ?? []);
-  const lastTickRef = useRef<EpochMs | null>(null);
+  const getSnapshot = useCallback(() => readHistory(key), [key]);
+  const history = useSyncExternalStore(subscribeHistory, getSnapshot, () => NO_POINTS);
 
-  // Switching child switches history.
-  useEffect(() => {
-    lastTickRef.current = null;
-    setHistory(soundHistory.get(key) ?? []);
-  }, [key]);
+  /** `"<child>:<tick>"` of the sample already recorded, to skip duplicates. */
+  const lastTickRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!live) return;
-    if (lastTickRef.current === live.ts_ms) return;
-    lastTickRef.current = live.ts_ms;
-    setHistory(
-      appendPoint(key, {
-        ts: live.ts_ms,
-        dbfs: live.sound_dbfs,
-        floor: live.noise_floor_dbfs,
-      }),
-    );
+    const tick = `${key}:${live.ts_ms}`;
+    if (lastTickRef.current === tick) return;
+    lastTickRef.current = tick;
+    appendPoint(key, {
+      ts: live.ts_ms,
+      dbfs: live.sound_dbfs,
+      floor: live.noise_floor_dbfs,
+    });
     // `dataUpdatedAt` is in the deps so a re-delivery of an identical object
     // (setQueryData with the same reference) still runs the guard above.
   }, [live, dataUpdatedAt, key]);
@@ -223,7 +244,7 @@ export function useLiveState(): LiveData {
 
   const nightOfValue =
     live?.night_of ??
-    computeNightOf(Date.now(), { tz: timezone, boundaryHour: child?.day_boundary_hour });
+    computeNightOf(now, { tz: timezone, boundaryHour: child?.day_boundary_hour });
 
   const refresh = useCallback(() => {
     reconnect();

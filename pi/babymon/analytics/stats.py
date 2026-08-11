@@ -652,10 +652,21 @@ def shrink_effects(
     """Empirical-Bayes shrinkage of a family of effect estimates toward zero.
 
     Without this, the top of any factor list is whichever tag has the fewest
-    nights, because small samples produce large estimates. The between-tag
-    variance ``τ²`` is estimated by subtracting the mean sampling variance from
-    the observed spread (DerSimonian-Laird), and each estimate is then pulled
-    toward zero in proportion to how much of its own variance is noise.
+    nights, because small samples produce large estimates and nothing else
+    penalises them for it.
+
+    The model is ``yᵢ = θᵢ + εᵢ`` with ``εᵢ ~ N(0, seᵢ²)`` and ``θᵢ ~ N(0, τ²)``.
+    Each estimate is then pulled toward zero by ``τ²/(τ² + seᵢ²)`` — the share
+    of its variance that is real signal rather than noise.
+
+    Everything turns on ``τ²``. The obvious estimator — observed spread minus
+    the *mean* sampling variance — is unusable here, because a single very
+    imprecise tag dominates that mean and collapses ``τ²`` to zero, shrinking
+    the entire family away. Since a family with one eleven-night tag beside a
+    hundred-night one is the normal case, ``τ²`` is instead found by solving
+    ``Σ yᵢ²/(τ² + seᵢ²) = k``, the Paule-Mandel condition. That weights each
+    estimate by its own precision, so an imprecise one contributes little
+    rather than swamping the result.
     """
     if len(estimates) != len(standard_errors):
         raise ValueError("shrink_effects requires matching estimates and standard errors")
@@ -663,17 +674,33 @@ def shrink_effects(
     if n < 3:
         # With one or two tags there is no family to borrow strength from.
         return list(estimates)
-    observed_variance = variance(estimates)
-    mean_sampling_variance = mean([se * se for se in standard_errors])
-    tau_squared = max(0.0, observed_variance - mean_sampling_variance)
-    if tau_squared <= 0:
-        # Everything we see is explicable as noise; shrink all the way.
+
+    variances = [max(se * se, 1e-12) for se in standard_errors]
+    squares = [y * y for y in estimates]
+
+    def statistic(tau_squared: float) -> float:
+        return sum(s / (tau_squared + v) for s, v in zip(squares, variances, strict=True))
+
+    # Decreasing in tau-squared, so if it is already at or below k with no
+    # between-tag variance at all, everything here is explicable as noise.
+    if statistic(0.0) <= n:
         return [0.0] * n
-    out: list[float] = []
-    for estimate, se in zip(estimates, standard_errors, strict=True):
-        weight = tau_squared / (tau_squared + se * se) if se > 0 else 1.0
-        out.append(estimate * weight)
-    return out
+
+    low, high = 0.0, max(squares) + max(variances) + 1.0
+    while statistic(high) > n and high < 1e12:
+        high *= 4.0
+    for _ in range(80):
+        mid = 0.5 * (low + high)
+        if statistic(mid) > n:
+            low = mid
+        else:
+            high = mid
+    tau_squared = 0.5 * (low + high)
+
+    return [
+        y * (tau_squared / (tau_squared + v))
+        for y, v in zip(estimates, variances, strict=True)
+    ]
 
 
 def phi_coefficient(a: Sequence[bool], b: Sequence[bool]) -> float:

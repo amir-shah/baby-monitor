@@ -223,6 +223,14 @@ def _demo_data(args: Any) -> int:
     child = children[0]
     rng = random.Random(7)
 
+    if not child.birthdate:
+        # Without a birthdate there is no age band, so the duration component
+        # drops out and the demo shows a score built from three parts instead
+        # of four — which is correct behaviour but a poor demonstration.
+        born = dt.date.today() - dt.timedelta(days=700)
+        child = repos.children.update(child.id, birthdate=born.isoformat()) or child
+        print(f"  (set a demo birthdate of {born} so the duration score has an age band)")
+
     today = dt.date.today()
     print(f"seeding {args.nights} nights for {child.name} ...")
     for offset in range(args.nights, 0, -1):

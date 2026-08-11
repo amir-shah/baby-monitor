@@ -34,29 +34,29 @@ from ..models import Tag as TagModel
 from ..timeutil import iso
 
 __all__ = [
-    "ChildOut",
     "ChildCreate",
+    "ChildOut",
     "ChildUpdate",
-    "TagOut",
-    "TagCreate",
-    "TagUpdate",
-    "NoteTagIn",
-    "NoteTagOut",
-    "NoteOut",
-    "NoteCreate",
-    "NoteUpdate",
-    "EventOut",
     "EventCreate",
+    "EventOut",
     "EventUpdate",
+    "HomeKitRecordingRequest",
+    "HomeKitTagRequest",
+    "LiveStateOut",
     "MediaOut",
-    "SegmentOut",
     "NightOut",
     "NightUpdate",
-    "LiveStateOut",
-    "HomeKitTagRequest",
-    "HomeKitRecordingRequest",
-    "RecomputeRequest",
+    "NoteCreate",
+    "NoteOut",
+    "NoteTagIn",
+    "NoteTagOut",
+    "NoteUpdate",
     "Page",
+    "RecomputeRequest",
+    "SegmentOut",
+    "TagCreate",
+    "TagOut",
+    "TagUpdate",
 ]
 
 
@@ -85,7 +85,7 @@ class ChildOut(BaseModel):
     updated_ms: int = 0
 
     @classmethod
-    def from_model(cls, child: Child, *, now_ms: int | None = None) -> "ChildOut":
+    def from_model(cls, child: Child, *, now_ms: int | None = None) -> ChildOut:
         return cls(
             id=child.id,
             name=child.name,
@@ -152,7 +152,7 @@ class TagOut(BaseModel):
     last_ms: int | None = None
 
     @classmethod
-    def from_model(cls, tag: TagModel, stats: dict[str, Any] | None = None) -> "TagOut":
+    def from_model(cls, tag: TagModel, stats: dict[str, Any] | None = None) -> TagOut:
         stats = stats or {}
         return cls(
             id=tag.id,
@@ -218,7 +218,8 @@ class NoteTagIn(_Base):
 
     def to_spec(self) -> dict[str, Any]:
         spec: dict[str, Any] = {"slug": self.slug}
-        for key in ("label", "category", "value_type", "value_num", "value_min_local", "value_text"):
+        for key in ("label", "category", "value_type", "value_num", "value_min_local",
+                    "value_text"):
             value = getattr(self, key)
             if value is not None:
                 spec[key] = str(value) if key in ("category", "value_type") else value
@@ -236,7 +237,7 @@ class NoteTagOut(BaseModel):
     value_display: str | None = None
 
     @classmethod
-    def from_model(cls, tag: NoteTag) -> "NoteTagOut":
+    def from_model(cls, tag: NoteTag) -> NoteTagOut:
         return cls(
             slug=tag.slug,
             label=tag.label,
@@ -263,7 +264,7 @@ class NoteOut(BaseModel):
     deleted_ms: int | None = None
 
     @classmethod
-    def from_model(cls, note: Note, tz: str | None = None) -> "NoteOut":
+    def from_model(cls, note: Note, tz: str | None = None) -> NoteOut:
         return cls(
             id=note.id,
             child_id=note.child_id,
@@ -326,7 +327,7 @@ class MediaOut(BaseModel):
     url: str = ""
 
     @classmethod
-    def from_model(cls, media: Media, tz: str | None = None) -> "MediaOut":
+    def from_model(cls, media: Media, tz: str | None = None) -> MediaOut:
         # rel_path is deliberately not exposed: it is a filesystem detail, and
         # a client that knows it is a client that will try to construct paths.
         return cls(
@@ -369,7 +370,7 @@ class EventOut(BaseModel):
     created_ms: int = 0
 
     @classmethod
-    def from_model(cls, event: Event, tz: str | None = None) -> "EventOut":
+    def from_model(cls, event: Event, tz: str | None = None) -> EventOut:
         return cls(
             id=event.id,
             child_id=event.child_id,
@@ -429,7 +430,7 @@ class SegmentOut(BaseModel):
     source: str = "detector"
 
     @classmethod
-    def from_model(cls, segment: SleepSegment) -> "SegmentOut":
+    def from_model(cls, segment: SleepSegment) -> SegmentOut:
         return cls(
             id=segment.id,
             start_ms=segment.start_ms,
@@ -481,7 +482,7 @@ class NightOut(BaseModel):
     computed_ms: int | None = None
 
     @classmethod
-    def from_model(cls, night: Night) -> "NightOut":
+    def from_model(cls, night: Night) -> NightOut:
         tz = night.timezone
         return cls(
             child_id=night.child_id,

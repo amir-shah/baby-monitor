@@ -123,10 +123,25 @@ class TestPermutation:
 
 class TestShrinkage:
     def test_noisy_estimates_are_pulled_further_toward_zero(self):
-        estimates = [1.0, 1.0, 1.0, 1.0]
-        errors = [0.1, 0.1, 0.1, 2.0]
+        """Two tags with the same estimate but different precision.
+
+        This is the whole point of shrinking: without it, the top of a factor
+        list is whichever tag has the fewest nights, because small samples
+        produce large estimates.
+        """
+        # The spread across the family is real, so tau-squared is positive and
+        # the shrinkage is differential rather than total.
+        estimates = [1.0, 0.6, -0.9, 1.0]
+        errors = [0.12, 0.15, 0.13, 2.0]
         shrunk = S.shrink_effects(estimates, errors)
+        # Same raw estimate, twentyfold the standard error.
         assert abs(shrunk[3]) < abs(shrunk[0])
+        # The precise ones survive nearly intact.
+        assert abs(shrunk[0]) > 0.8 * abs(estimates[0])
+        # Nothing changes sign or grows.
+        for original, adjusted in zip(estimates, shrunk, strict=True):
+            assert abs(adjusted) <= abs(original) + 1e-12
+            assert original * adjusted >= 0
 
     def test_everything_collapses_when_the_spread_is_all_noise(self):
         shrunk = S.shrink_effects([0.1, -0.1, 0.05], [1.0, 1.0, 1.0])

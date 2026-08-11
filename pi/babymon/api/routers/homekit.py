@@ -22,6 +22,7 @@ tags on it should not vanish because one switch was flipped back.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 from pathlib import Path
@@ -52,7 +53,9 @@ _MAC_RE = re.compile(r"^([0-9A-F]{2}:){5}[0-9A-F]{2}$")
 # ---------------------------------------------------------------------------
 
 
-def _tag_switch_states(repos: Repos, child: Child, night_of: str, switches: Any) -> list[dict[str, Any]]:
+def _tag_switch_states(
+    repos: Repos, child: Child, night_of: str, switches: Any
+) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for switch in switches:
         note = repos.notes.find_tag_note(child.id, night_of, switch.slug)
@@ -78,7 +81,7 @@ def homekit_state(
     child = child_or_default(repos, child_id)
     try:
         state = runtime.live_state(child.id)
-    except Exception:  # noqa: BLE001 - the bridge must still get a usable answer
+    except Exception:
         state = repos.live_state(child)
     if not state.night_of:
         state = repos.live_state(child)
@@ -314,10 +317,8 @@ def _load_accessory_info(hap_dir: str, username: str) -> tuple[dict[str, Any] | 
     candidates: list[Path] = []
     if _MAC_RE.match(username.upper()):
         candidates.append(base / f"AccessoryInfo.{username.replace(':', '').upper()}.json")
-    try:
+    with contextlib.suppress(OSError):
         candidates.extend(sorted(base.glob("AccessoryInfo.*.json")))
-    except OSError:
-        pass
     for path in candidates:
         try:
             data = json.loads(path.read_text(encoding="utf-8"))

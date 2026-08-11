@@ -222,7 +222,7 @@ def test_patterns(tmp_path: Path) -> None:
 
     dow = body["day_of_week"]
     assert len(dow) == 7
-    assert [d["label"] for d in dow][0] == "Monday"
+    assert dow[0]["label"] == "Monday"
     assert sum(d["n"] for d in dow) == 60
 
     temp_bins = body["environment"]["temp_c"]

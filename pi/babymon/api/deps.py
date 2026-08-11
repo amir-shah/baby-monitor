@@ -35,20 +35,20 @@ if TYPE_CHECKING:  # pragma: no cover - import cycle only exists for type checke
 
 __all__ = [
     "AppContext",
-    "get_ctx",
-    "get_config",
-    "get_repos",
-    "get_runtime",
-    "current_child",
-    "child_or_default",
-    "Pagination",
-    "pagination",
+    "ChildDep",
     "ConfigDep",
+    "IdempotencyKey",
+    "PageDep",
+    "Pagination",
     "ReposDep",
     "RuntimeDep",
-    "ChildDep",
-    "PageDep",
-    "IdempotencyKey",
+    "child_or_default",
+    "current_child",
+    "get_config",
+    "get_ctx",
+    "get_repos",
+    "get_runtime",
+    "pagination",
 ]
 
 #: Nothing in this API returns an unbounded list; a night of samples is tens of
@@ -62,8 +62,8 @@ class AppContext:
 
     config: Config
     repos: Repos
-    runtime: "Runtime"
-    auth: "AuthManager"
+    runtime: Runtime
+    auth: AuthManager
     started_ms: int = field(default_factory=now_ms)
     started_monotonic: float = field(default_factory=time.monotonic)
 
@@ -87,7 +87,7 @@ def get_repos(request: Request) -> Repos:
     return get_ctx(request).repos
 
 
-def get_runtime(request: Request) -> "Runtime":
+def get_runtime(request: Request) -> Runtime:
     return get_ctx(request).runtime
 
 

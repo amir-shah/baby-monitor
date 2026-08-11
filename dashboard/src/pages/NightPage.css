@@ -1,0 +1,153 @@
+/* The night detail view. */
+
+.night-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.night-page__loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* ---- Prev / next -------------------------------------------------------- */
+
+.night-nav {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.night-nav__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--tap-target);
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  text-decoration: none;
+  justify-self: start;
+  min-width: 0;
+}
+
+.night-nav__link--next {
+  justify-self: end;
+}
+
+.night-nav__link:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.night-nav__link.is-disabled {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.night-nav__link-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.night-nav__current {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tight);
+  text-align: center;
+  white-space: nowrap;
+}
+
+@media (max-width: 24rem) {
+  /* At 390px minus the shell padding there is not room for three labels, so
+     the arrows carry the meaning and the dates drop away. */
+  .night-nav__link-text {
+    display: none;
+  }
+}
+
+@media (min-width: 40rem) {
+  .night-nav__current {
+    font-size: var(--text-xl);
+  }
+}
+
+/* ---- Header strip ------------------------------------------------------- */
+
+.night-page__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.night-page__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.night-page__header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+/* ---- Chart -------------------------------------------------------------- */
+
+.night-page__chart {
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}
+
+@media (max-width: 26rem) {
+  /* Give the timeline every pixel it can get on a phone. */
+  .night-page__chart {
+    padding-inline: var(--space-2);
+  }
+}
+
+/* ---- Room conditions ---------------------------------------------------- */
+
+.night-room {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-4);
+  margin: 0;
+}
+
+.night-room > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.night-room dt {
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.night-room dd {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  color: var(--text);
+}
+
+/* ---- Footer link -------------------------------------------------------- */
+
+.night-page__all-events {
+  margin: 0;
+  padding-block: var(--space-2);
+  font-size: var(--text-sm);
+}
