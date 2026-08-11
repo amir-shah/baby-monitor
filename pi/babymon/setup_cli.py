@@ -248,9 +248,21 @@ def _demo_data(args: Any) -> int:
         wake = onset + int((10.0 + rng.uniform(-1.2, 0.8)) * 3_600_000) - penalty * 60_000
         out_of_bed = wake + int(rng.uniform(3, 25) * 60_000)
 
-        segments: list[SleepSegment] = [
-            SleepSegment(0, child.id, key, bedtime, onset, SleepState.SETTLING),
-        ]
+        # An afternoon nap, because the age bands are per 24 hours *including*
+        # naps: a toddler given ten hours of night and nothing else is scored
+        # against an eleven-hour floor and comes out "Poor" every night, which
+        # makes the seeded dashboard look like the analytics are broken. It is
+        # also the case the nocturnal cut exists for, so demo data that omits
+        # it exercises none of that.
+        segments: list[SleepSegment] = []
+        if rng.random() < 0.8:
+            nap_start = window.start_ms + int((1.0 + rng.uniform(0, 1.5)) * 3_600_000)
+            nap_end = nap_start + int(rng.uniform(45, 110) * 60_000)
+            segments += [
+                SleepSegment(0, child.id, key, nap_start, nap_end, SleepState.ASLEEP),
+                SleepSegment(0, child.id, key, nap_end, bedtime, SleepState.ABSENT),
+            ]
+        segments.append(SleepSegment(0, child.id, key, bedtime, onset, SleepState.SETTLING))
         cursor = onset
         awakenings = rng.choices([0, 1, 2, 3], weights=[35, 35, 20, 10])[0] + (1 if dessert else 0)
         for _ in range(awakenings):
