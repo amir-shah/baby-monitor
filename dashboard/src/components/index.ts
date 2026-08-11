@@ -29,6 +29,18 @@ export * from './Icons';
 export { Modal } from './Modal';
 export type { ModalProps } from './Modal';
 
+export { NoteComposer } from './NoteComposer';
+export type { NoteComposerProps } from './NoteComposer';
+
+export { NoteComposerDialog } from './NoteComposerDialog';
+export type { NoteComposerDialogProps } from './NoteComposerDialog';
+
+export { QrCode } from './QrCode';
+export type { QrCodeProps } from './QrCode';
+
+export { QuickTagRow } from './QuickTagRow';
+export type { QuickTagRowProps } from './QuickTagRow';
+
 export { Select } from './Select';
 export type { SelectOption, SelectProps } from './Select';
 

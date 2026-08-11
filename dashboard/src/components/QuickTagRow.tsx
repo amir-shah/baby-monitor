@@ -39,6 +39,15 @@ import {
 import type { NightOf, NoteTagInput, TagWithStats, Timezone } from '../lib/types';
 import './QuickTagRow.css';
 
+/**
+ * "Lights off at …" almost always means "at about now", so the time control
+ * opens pre-filled rather than empty. Read outside the component: the clock is
+ * not something a render may depend on.
+ */
+function currentMinuteOfDay(tz: Timezone | null | undefined): number {
+  return minutesOfDay(Date.now(), tz);
+}
+
 export interface QuickTagRowProps {
   childId: number | undefined;
   /** The night a tap logs against. */
@@ -165,7 +174,7 @@ export function QuickTagRow({
       current
         ? toTagInput(current)
         : tag.value_type === 'time'
-          ? { slug: tag.slug, value_min_local: minutesOfDay(Date.now(), timezone) }
+          ? { slug: tag.slug, value_min_local: currentMinuteOfDay(timezone) }
           : { slug: tag.slug },
     );
   }

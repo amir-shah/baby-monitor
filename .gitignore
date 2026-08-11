@@ -56,3 +56,8 @@ config/*.local.yaml
 *.swp
 
 # Lockfiles for the two Node projects are committed; their trees are not.
+
+# Scratch render harness some tooling drops in dashboard/ to eyeball a
+# component in isolation. It hardcodes absolute paths, so it is local-only.
+dashboard/.harness/
+dashboard/vite.harness.config.ts

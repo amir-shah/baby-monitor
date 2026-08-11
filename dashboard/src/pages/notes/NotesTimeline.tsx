@@ -13,7 +13,7 @@ import { Card, Chip, EmptyState, IconButton, NotesIcon, TrashIcon } from '../../
 import { NoteComposer } from '../../components/NoteComposer';
 import { formatClock, formatRelative, nightLabel, titleCase } from '../../lib/format';
 import { groupNotesByNight, tagLabel, tagValueDisplay } from '../../lib/notesModel';
-import type { NightOf, Note, TagWithStats, Timezone } from '../../lib/types';
+import type { Note, TagWithStats, Timezone } from '../../lib/types';
 import './NotesTimeline.css';
 
 export interface NotesTimelineProps {
@@ -90,7 +90,7 @@ export function NotesTimeline({
                   <div className="timeline__editor">
                     <NoteComposer
                       childId={childId}
-                      nightOf={note.night_of as NightOf}
+                      nightOf={note.night_of}
                       note={note}
                       timezone={timezone}
                       boundaryHour={boundaryHour}

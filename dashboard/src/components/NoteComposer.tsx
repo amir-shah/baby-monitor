@@ -59,7 +59,6 @@ import type {
   NoteTagInput,
   TagCategory,
   TagValueType,
-  TagWithStats,
   Timezone,
 } from '../lib/types';
 import './NoteComposer.css';

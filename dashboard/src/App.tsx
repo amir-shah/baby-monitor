@@ -17,7 +17,8 @@ import { LivePage } from './pages/LivePage';
 import { LoginPage } from './pages/LoginPage';
 import { NightPage } from './pages/NightPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
-import { NotesPage, SystemPage } from './pages/stubs';
+import { NotesPage } from './pages/NotesPage';
+import { SystemPage } from './pages/SystemPage';
 
 /** Route metadata read back by the shell for the header title. */
 interface RouteHandle {

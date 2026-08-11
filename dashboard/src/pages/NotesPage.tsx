@@ -128,7 +128,15 @@ export function NotesPage() {
     setDefaultTimezone(timezone);
   }, [timezone]);
 
-  const tonight = computeNightOf(Date.now(), { tz: timezone, boundaryHour });
+  // A tab left open overnight must not keep logging to yesterday, so the
+  // current night is state on a slow timer rather than a value read at render.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const tonight = computeNightOf(now, { tz: timezone, boundaryHour });
 
   const minNights = readMinNights(configQuery.data);
   const minNightsTotal = readMinNightsTotal(configQuery.data);
