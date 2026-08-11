@@ -13,14 +13,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { EmptyState, ErrorState, SeverityBadge, Skeleton } from '../../components';
+import { EmptyState, ErrorState, PauseIcon, PlayIcon, SeverityBadge, Skeleton } from '../../components';
 import { IconButton } from '../../components/IconButton';
 import { events as eventsApi, media as mediaApi } from '../../lib/api';
 import { eventLabelText, formatClock, formatDurationSeconds } from '../../lib/format';
 import { effectiveLabel, isFalsePositive, isOpen } from '../../lib/types';
 import type { StreamSubscribe } from '../../hooks/useEventStream';
 import type { BabyEvent, MediaRef, NightOf } from '../../lib/types';
-import { PauseIcon, PlayIcon } from './LiveIcons';
 import './RecentEvents.css';
 
 const HOW_MANY = 6;
@@ -123,8 +122,8 @@ function EventRow({
   const clip = event.media?.find((entry) => entry.kind === 'audio_clip');
 
   return (
-    <li className={falsePositive ? 'event-row is-dismissed' : 'event-row'}>
-      <span className="event-row__play">
+    <li className={falsePositive ? 'live-event is-dismissed' : 'live-event'}>
+      <span className="live-event__play">
         {clip ? (
           <ClipButton
             clip={clip}
@@ -136,25 +135,25 @@ function EventRow({
         ) : null}
       </span>
 
-      <span className="event-row__body">
-        <span className="event-row__line">
-          <time className="event-row__time" dateTime={new Date(event.start_ms).toISOString()}>
+      <span className="live-event__body">
+        <span className="live-event__line">
+          <time className="live-event__time" dateTime={new Date(event.start_ms).toISOString()}>
             {formatClock(event.start_ms)}
           </time>
-          <span className="event-row__label">{label}</span>
+          <span className="live-event__label">{label}</span>
           {event.severity === 'info' ? null : (
             <SeverityBadge severity={event.severity} size="sm" />
           )}
         </span>
 
-        <span className="event-row__meta">
+        <span className="live-event__meta">
           {falsePositive ? 'Marked as not a real event' : null}
           {!falsePositive && open ? 'Happening now' : null}
           {!falsePositive && !open && event.duration_s !== null
             ? formatDurationSeconds(event.duration_s)
             : null}
           {clip ? (
-            <span className="event-row__clip" data-numeric>
+            <span className="live-event__clip" data-numeric>
               clip {formatDurationSeconds(clip.duration_s ?? null)}
             </span>
           ) : null}

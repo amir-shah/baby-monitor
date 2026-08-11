@@ -27,7 +27,7 @@ import {
   describeError,
   useToast,
 } from '../components';
-import { ApiError, auth, children as childrenApi, system } from '../lib/api';
+import { ApiError, auth, system } from '../lib/api';
 import {
   formatBytes,
   formatCount,
@@ -48,8 +48,11 @@ import {
   normalizeHealth,
   normalizeSystemInfo,
 } from './system/normalize';
+import type { EffectiveConfig } from '../lib/types';
 import type { ComponentStatus, DatabaseView, DiskView, SystemInfoView } from './system/normalize';
 import './SystemPage.css';
+import { useChildren, pickActiveChild } from '../hooks/useChildren';
+import { useConfig, resolveTimezone } from '../hooks/useConfig';
 
 /** A Pi throttles at 80 °C; 70 is where it is worth mentioning. */
 const TEMP_WARN_C = 70;
@@ -79,17 +82,9 @@ export function SystemPage() {
     staleTime: 30_000,
   });
 
-  const configQuery = useQuery({
-    queryKey: ['config'],
-    queryFn: ({ signal }) => system.config(signal),
-    staleTime: 10 * 60_000,
-  });
+  const configQuery = useConfig();
 
-  const childrenQuery = useQuery({
-    queryKey: ['children'],
-    queryFn: ({ signal }) => childrenApi.list({}, signal),
-    staleTime: 5 * 60_000,
-  });
+  const childrenQuery = useChildren();
 
   const sessionQuery = useQuery({
     queryKey: ['session'],
@@ -105,12 +100,9 @@ export function SystemPage() {
   const info = useMemo(() => normalizeSystemInfo(infoQuery.data), [infoQuery.data]);
   const config = useMemo(() => normalizeConfig(configQuery.data), [configQuery.data]);
 
-  const child = useMemo(() => {
-    const items = childrenQuery.data?.items ?? [];
-    return items.find((candidate) => candidate.active) ?? items[0];
-  }, [childrenQuery.data]);
+  const child = useMemo(() => pickActiveChild(childrenQuery.data?.items), [childrenQuery.data]);
 
-  const timezone = child?.timezone ?? configQuery.data?.site?.timezone ?? null;
+  const timezone = resolveTimezone(child, configQuery.data?.config);
 
   useEffect(() => {
     setDefaultTimezone(timezone);
@@ -144,7 +136,7 @@ export function SystemPage() {
       <SessionCard
         session={sessionQuery.data}
         error={sessionQuery.error}
-        authConfigured={configEnabled(configQuery.data)}
+        authConfigured={configEnabled(configQuery.data?.config)}
         busy={signingOut}
         onSignOut={() => void signOut()}
         onSignIn={() => navigate('/login')}
@@ -339,13 +331,9 @@ function SessionCard({
   );
 }
 
-function configEnabled(config: unknown): boolean | null {
-  if (typeof config !== 'object' || config === null) return null;
-  const root = config as Record<string, unknown>;
-  const inner = (root.config as Record<string, unknown> | undefined) ?? root;
-  const api = inner.api as Record<string, unknown> | undefined;
-  const authSection = api?.auth as Record<string, unknown> | undefined;
-  return typeof authSection?.enabled === 'boolean' ? authSection.enabled : null;
+function configEnabled(config: EffectiveConfig | undefined): boolean | null {
+  const enabled = config?.api?.auth?.enabled;
+  return typeof enabled === 'boolean' ? enabled : null;
 }
 
 // ---------------------------------------------------------------------------

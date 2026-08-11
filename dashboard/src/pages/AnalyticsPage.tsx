@@ -14,7 +14,7 @@
 import { useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { analytics as analyticsApi, children as childrenApi, system } from '../lib/api';
+import { analytics as analyticsApi } from '../lib/api';
 import { Select } from '../components';
 import { setDefaultTimezone, parseLocalTime, plural } from '../lib/format';
 import { ActogramCard } from './analytics/Actogram';
@@ -25,6 +25,8 @@ import { SUMMARY_DAYS, SummaryHeader } from './analytics/SummaryHeader';
 import { WeeklyTrends } from './analytics/WeeklyTrends';
 import { METRIC_OPTIONS, isKnownMetric } from './analytics/metrics';
 import './AnalyticsPage.css';
+import { useChildren, pickActiveChild } from '../hooks/useChildren';
+import { useConfig } from '../hooks/useConfig';
 
 /** Windows worth offering. Anything under a month cannot support a comparison. */
 const WINDOW_CHOICES = [30, 60, 90, 180, 365] as const;
@@ -37,11 +39,7 @@ export function AnalyticsPage() {
 
   // -- Which child ----------------------------------------------------------
 
-  const childrenQuery = useQuery({
-    queryKey: ['children'],
-    queryFn: ({ signal }) => childrenApi.list({}, signal),
-    staleTime: 5 * 60_000,
-  });
+  const childrenQuery = useChildren();
 
   const childParam = Number(searchParams.get('child'));
   const child = useMemo(() => {
@@ -50,7 +48,7 @@ export function AnalyticsPage() {
       const named = items.find((candidate) => candidate.id === childParam);
       if (named) return named;
     }
-    return items.find((candidate) => candidate.active) ?? items[0];
+    return pickActiveChild(items);
   }, [childrenQuery.data, childParam]);
 
   // Every clock label on this page is the nursery's clock, not the phone's.
@@ -60,13 +58,9 @@ export function AnalyticsPage() {
 
   // -- Config: the gates the analysis was run under -------------------------
 
-  const configQuery = useQuery({
-    queryKey: ['config'],
-    queryFn: ({ signal }) => system.config(signal),
-    staleTime: 10 * 60_000,
-  });
+  const configQuery = useConfig();
 
-  const analyticsConfig = configQuery.data?.analytics;
+  const analyticsConfig = configQuery.data?.config.analytics;
   const minN = analyticsConfig?.min_nights_per_group ?? FALLBACK_MIN_N;
   const spanThreshold = readSpanFraction(analyticsConfig) ?? FALLBACK_SPAN_FRACTION;
   const defaultDays = analyticsConfig?.default_window_days ?? 180;
@@ -145,6 +139,7 @@ export function AnalyticsPage() {
         metricKey={metricKey}
         minN={minN}
         spanThreshold={spanThreshold}
+        fdrQ={analyticsConfig?.fdr_q ?? null}
         controls={
           <Select
             label="Compared against"

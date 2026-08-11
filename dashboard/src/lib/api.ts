@@ -20,6 +20,7 @@ import type {
   Child,
   ChildCreate,
   ChildPatch,
+  ConfigResponse,
   EffectiveConfig,
   EpochMs,
   ErrorEnvelope,
@@ -387,9 +388,28 @@ export const system = {
     return request<string>('/api/metrics', { headers: { Accept: 'text/plain' }, signal });
   },
 
-  /** `GET /api/config` — effective config, secrets redacted. */
-  config(signal?: AbortSignal): Promise<EffectiveConfig> {
-    return request<EffectiveConfig>('/api/config', { signal });
+  /**
+   * `GET /api/config` — effective config, secrets redacted.
+   *
+   * The service wraps the config in `{"config": …, "warnings": […]}` while
+   * docs/API.md describes the bare object. Both are unwrapped here, at the one
+   * boundary that touches the wire, so no page has to guess: every caller gets
+   * `{ config, warnings }` and reads `data.config.site?.timezone`.
+   */
+  async config(signal?: AbortSignal): Promise<ConfigResponse> {
+    const raw = await request<unknown>('/api/config', { signal });
+    const root: Record<string, unknown> =
+      typeof raw === 'object' && raw !== null && !Array.isArray(raw)
+        ? (raw as Record<string, unknown>)
+        : {};
+    const inner = root.config;
+    const config = (
+      typeof inner === 'object' && inner !== null && !Array.isArray(inner) ? inner : root
+    ) as EffectiveConfig;
+    const warnings = Array.isArray(root.warnings)
+      ? root.warnings.filter((entry): entry is string => typeof entry === 'string')
+      : [];
+    return { config, warnings };
   },
 
   /** `POST /api/system/recompute` — rebuild night rollups. */

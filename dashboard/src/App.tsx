@@ -11,6 +11,8 @@ import {
 } from 'react-router-dom';
 import type { RouteObject } from 'react-router-dom';
 import { AppShell, Button, Card, EmptyState, ErrorState } from './components';
+import { useActiveChild } from './hooks/useChildren';
+import { useConfig, resolveTimezone } from './hooks/useConfig';
 import { setUnauthorizedHandler } from './lib/api';
 import { EventsPage } from './pages/EventsPage';
 import { LivePage } from './pages/LivePage';
@@ -54,8 +56,21 @@ function RootLayout() {
     });
   }, [navigate, location.pathname, location.search]);
 
+  // The shell needs the nursery's clock, not the phone's: the Night nav link
+  // resolves "tonight" through it, and at 1am in a different timezone those
+  // are different dates. Both queries are shared cache entries the pages fetch
+  // anyway, so this costs no extra requests.
+  const configQuery = useConfig();
+  const { child } = useActiveChild();
+  const timezone = resolveTimezone(child, configQuery.data?.config);
+
   return (
-    <AppShell title={title}>
+    <AppShell
+      title={title}
+      siteName={configQuery.data?.config.site?.name || 'babymon'}
+      timezone={timezone}
+      boundaryHour={child?.day_boundary_hour}
+    >
       <Outlet />
     </AppShell>
   );

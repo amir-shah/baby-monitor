@@ -50,6 +50,13 @@ import { metricSpec } from './metrics';
 import type { MetricSpec } from './metrics';
 import './FactorForest.css';
 
+/** Signed tick label for the −1..+1 correlation axis: "−0.4", "+0.4". */
+function formatSignedRhoTick(value: number): string {
+  const rounded = Number(value.toFixed(1));
+  if (rounded === 0) return '0';
+  return `${rounded > 0 ? '+' : '−'}${Math.abs(rounded).toFixed(1)}`;
+}
+
 // ---------------------------------------------------------------------------
 // Geometry
 // ---------------------------------------------------------------------------
@@ -70,6 +77,8 @@ export interface FactorForestProps {
   minN: number;
   /** `analytics.min_span_fraction`. */
   spanThreshold?: number;
+  /** `analytics.fdr_q`, for the multiplicity note when the API omits alpha. */
+  fdrQ?: number | null;
   /** The outcome picker, rendered in the card header. */
   controls?: ReactNode;
 }
@@ -80,6 +89,7 @@ export function FactorForest({
   metricKey,
   minN,
   spanThreshold,
+  fdrQ,
   controls,
 }: FactorForestProps) {
   const spec = useMemo(() => metricSpec(metricKey), [metricKey]);
@@ -121,7 +131,7 @@ export function FactorForest({
           groups={built.groups}
           correlations={built.correlations}
           bestTier={built.bestTier}
-          multiplicity={multiplicityNote(data)}
+          multiplicity={multiplicityNote(data, fdrQ)}
           disclaimer={data?.disclaimer ?? null}
           waiting={waiting}
           minN={minN}
@@ -207,7 +217,7 @@ function ForestBody({
                 width={width}
                 lowCaption={`more of the tag, ${spec.phrase('down')}`}
                 highCaption={`more of the tag, ${spec.phrase('up')}`}
-                formatTick={(value) => value.toFixed(1).replace('-', '−')}
+                formatTick={formatSignedRhoTick}
                 unit=""
               />
             </section>
@@ -253,11 +263,12 @@ function ForestGroup({ rows, width, lowCaption, highCaption, formatTick, unit }:
   return (
     <div className="forest__group">
       {width > 0 ? (
-        <ForestAxis scale={scale} width={width} ticks={ticks} formatTick={formatTick} unit={unit} />
+        <ForestAxis scale={scale} width={width} ticks={ticks} formatTick={formatTick} />
       ) : null}
 
       <div className="forest__captions" aria-hidden="true">
         <span className="forest__caption">← {lowCaption}</span>
+        {unit ? <span className="forest__caption forest__caption--unit">{unit}</span> : null}
         <span className="forest__caption forest__caption--end">{highCaption} →</span>
       </div>
 
@@ -275,13 +286,11 @@ function ForestAxis({
   width,
   ticks,
   formatTick,
-  unit,
 }: {
   scale: Scale;
   width: number;
   ticks: number[];
   formatTick: (value: number) => string;
-  unit: string;
 }) {
   const zero = scale(0);
   return (
@@ -312,9 +321,6 @@ function ForestAxis({
           </g>
         );
       })}
-      <text className="forest__axis-unit" x={width - PAD_X} y={AXIS_H - 13} textAnchor="end">
-        {unit}
-      </text>
       <line className="forest__zero" x1={zero} y1={AXIS_H - 9} x2={zero} y2={AXIS_H} />
     </svg>
   );

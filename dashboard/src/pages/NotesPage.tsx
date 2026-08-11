@@ -31,9 +31,7 @@ import { NoteComposer } from '../components/NoteComposer';
 import { QuickTagRow } from '../components/QuickTagRow';
 import { useEventStream } from '../hooks/useEventStream';
 import {
-  children as childrenApi,
   notes as notesApi,
-  system as systemApi,
   tags as tagsApi,
 } from '../lib/api';
 import {
@@ -44,11 +42,13 @@ import {
   shiftNightOf,
 } from '../lib/format';
 import { DEFAULT_MIN_NIGHTS, sortTagsForPicker, tagLabel } from '../lib/notesModel';
-import type { Note, TagWithStats } from '../lib/types';
+import type { EffectiveConfig, Note, TagWithStats } from '../lib/types';
 import { ConfirmDialog } from './notes/ConfirmDialog';
 import { NotesTimeline } from './notes/NotesTimeline';
 import { TagManager } from './notes/TagManager';
 import './NotesPage.css';
+import { useChildren, pickActiveChild } from '../hooks/useChildren';
+import { useConfig, resolveTimezone } from '../hooks/useConfig';
 
 /** One page of journal. "Show more" grows the window rather than paginating. */
 const PAGE_SIZE = 50;
@@ -104,24 +104,13 @@ export function NotesPage() {
 
   // -- Who and when ---------------------------------------------------------
 
-  const childrenQuery = useQuery({
-    queryKey: ['children'],
-    queryFn: ({ signal }) => childrenApi.list({}, signal),
-    staleTime: 5 * 60_000,
-  });
+  const childrenQuery = useChildren();
 
-  const child = useMemo(() => {
-    const items = childrenQuery.data?.items ?? [];
-    return items.find((candidate) => candidate.active) ?? items[0];
-  }, [childrenQuery.data]);
+  const child = useMemo(() => pickActiveChild(childrenQuery.data?.items), [childrenQuery.data]);
 
-  const configQuery = useQuery({
-    queryKey: ['config'],
-    queryFn: ({ signal }) => systemApi.config(signal),
-    staleTime: 10 * 60_000,
-  });
+  const configQuery = useConfig();
 
-  const timezone = child?.timezone ?? configQuery.data?.site?.timezone ?? null;
+  const timezone = resolveTimezone(child, configQuery.data?.config);
   const boundaryHour = child?.day_boundary_hour ?? DEFAULT_DAY_BOUNDARY_HOUR;
 
   useEffect(() => {
@@ -138,8 +127,9 @@ export function NotesPage() {
 
   const tonight = computeNightOf(now, { tz: timezone, boundaryHour });
 
-  const minNights = readMinNights(configQuery.data);
-  const minNightsTotal = readMinNightsTotal(configQuery.data);
+  const analyticsConfig = configQuery.data?.config.analytics;
+  const minNights = readMinNights(analyticsConfig);
+  const minNightsTotal = readMinNightsTotal(analyticsConfig);
 
   // -- The journal ----------------------------------------------------------
 
@@ -259,7 +249,7 @@ export function NotesPage() {
       ) : (
         <>
           <Card
-            title={`Log something for ${nightLabel(tonight).toLowerCase()}`}
+            title={`Log something for ${nightLabel(tonight, { tz: timezone, boundaryHour }).toLowerCase()}`}
             subtitle="One tap for the usual things; the box below for everything else."
           >
             <div className="notes-page__entry">
@@ -436,23 +426,13 @@ export function NotesPage() {
  * effective config in `{"config": …}`. Read through both shapes so the gate
  * shown here is the gate the API actually applies.
  */
-function analyticsSection(config: unknown): Record<string, unknown> | undefined {
-  if (typeof config !== 'object' || config === null) return undefined;
-  const root = config as Record<string, unknown>;
-  const inner = typeof root.config === 'object' && root.config !== null ? (root.config as Record<string, unknown>) : root;
-  const analytics = inner.analytics;
-  return typeof analytics === 'object' && analytics !== null
-    ? (analytics as Record<string, unknown>)
-    : undefined;
-}
-
-function readMinNights(config: unknown): number {
-  const value = analyticsSection(config)?.min_nights_per_group;
+function readMinNights(analytics: EffectiveConfig['analytics']): number {
+  const value = analytics?.min_nights_per_group;
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : DEFAULT_MIN_NIGHTS;
 }
 
-function readMinNightsTotal(config: unknown): number | null {
-  const value = analyticsSection(config)?.min_nights_total;
+function readMinNightsTotal(analytics: EffectiveConfig['analytics']): number | null {
+  const value = analytics?.min_nights_total;
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
 }
 

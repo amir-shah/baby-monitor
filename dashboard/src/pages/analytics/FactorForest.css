@@ -145,15 +145,10 @@
   shape-rendering: crispEdges;
 }
 
-.forest__axis-label,
-.forest__axis-unit {
+.forest__axis-label {
   fill: var(--chart-label);
   font-size: var(--text-2xs);
   font-variant-numeric: tabular-nums;
-}
-
-.forest__axis-unit {
-  fill: var(--text-subtle);
 }
 
 .forest__captions {
@@ -167,6 +162,12 @@
 
 .forest__caption--end {
   text-align: end;
+}
+
+/* The unit sits between the two end captions rather than inside the axis SVG,
+   where it would collide with the last tick label on a narrow screen. */
+.forest__caption--unit {
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---- Rows --------------------------------------------------------------- */

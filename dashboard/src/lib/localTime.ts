@@ -16,8 +16,6 @@
 import type { EpochMs, NightOf, Timezone } from './types';
 import { DEFAULT_DAY_BOUNDARY_HOUR, getDefaultTimezone, parseNightOf, shiftNightOf } from './format';
 
-const MINUTE_MS = 60_000;
-
 /** Broken-down local time, the way a form holds it. */
 export interface WallClock {
   year: number;
@@ -147,35 +145,22 @@ export function epochForNightTime(
   const { tz, boundaryHour = DEFAULT_DAY_BOUNDARY_HOUR } = options;
 
   const minutes = Math.round(minutesAfterMidnight);
-  const hour = Math.floor((((minutes % 1440) + 1440) % 1440) / 60);
-  const dayShift = Math.floor(minutes / 1440) + (hour < boundaryHour ? 1 : 0);
+  const withinDay = ((minutes % 1440) + 1440) % 1440;
+  const hour = Math.floor(withinDay / 60);
+
+  // A value outside 0..1439 has already said which day it means (that is what
+  // `value_min_local` does on a time tag); only a plain wall clock needs the
+  // boundary rule applied to it.
+  const explicitDays = Math.floor(minutes / 1440);
+  const dayShift = explicitDays !== 0 ? explicitDays : hour < boundaryHour ? 1 : 0;
+
   const date = parseNightOf(shiftNightOf(night, dayShift));
   if (!date) return null;
 
   return epochFromWallClock(
-    {
-      year: date.year,
-      month: date.month,
-      day: date.day,
-      hour,
-      minute: (((minutes % 1440) + 1440) % 1440) % 60,
-    },
+    { year: date.year, month: date.month, day: date.day, hour, minute: withinDay % 60 },
     tz,
   );
-}
-
-/**
- * Whether an instant already sits inside a night, so an edit that does not
- * touch the time control does not silently move the note.
- */
-export function isWithinNight(
-  ms: EpochMs,
-  night: NightOf,
-  options: NightTimeOptions = {},
-): boolean {
-  const minutes = minutesOfDay(ms, options.tz);
-  const recomputed = epochForNightTime(night, minutes, options);
-  return recomputed !== null && Math.abs(recomputed - ms) < MINUTE_MS;
 }
 
 function pad2(value: number): string {

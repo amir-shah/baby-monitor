@@ -19,7 +19,7 @@
  *     user and are interpolated, never rewritten.
  */
 
-import { formatCountOf, plural } from '../../lib/format';
+import { formatCountOf, plural, titleCase } from '../../lib/format';
 import type {
   Confounder,
   FactorResult,
@@ -129,9 +129,13 @@ if (import.meta.env.DEV) {
     ...Object.values(PHRASES),
     ...Object.values(TIER_BLURB),
     ...Object.values(TIER_LABEL),
-    ...METRIC_SPECS.flatMap((spec) => [spec.phrase('down'), spec.phrase('up'), spec.noun]),
-    MIDPOINT_SPEC.phrase('down'),
-    MIDPOINT_SPEC.phrase('up'),
+    ...[...METRIC_SPECS, MIDPOINT_SPEC].flatMap((spec) => [
+      spec.phrase('down'),
+      spec.phrase('up'),
+      spec.gap(1, 'down'),
+      spec.gap(1, 'up'),
+      spec.noun,
+    ]),
   ];
   const offenders = auditPhrases(generated);
   if (offenders.length > 0) {
@@ -319,8 +323,7 @@ function groupRow(factor: FactorResult, spec: MetricSpec, extras: FactorExtras, 
   const sentence =
     diff === null || Math.abs(diff) < 1e-9
       ? `Nights with this tag ${PHRASES.sameAsWithout}.`
-      : `Nights with this tag ${PHRASES.averaged} ${spec.formatMagnitude(diff)} ` +
-        `${spec.phrase(diff < 0 ? 'down' : 'up')} ${PHRASES.thanWithout}.`;
+      : `Nights with this tag ${PHRASES.averaged} ${spec.gap(diff, diff < 0 ? 'down' : 'up')} ${PHRASES.thanWithout}.`;
 
   const flags = flagsFor(factor, extras, spanThreshold);
 
@@ -364,12 +367,14 @@ function correlationRow(
   const headline =
     rho === null ? '—' : interval ? `ρ ${formatRho(rho)} (${interval})` : `ρ ${formatRho(rho)}`;
 
+  // A slope that rounds away at the metric's own precision says nothing, so
+  // it is left out rather than printed as "±0.0 per minute".
   const slope = finite(factor.slope_per_unit ?? null);
-  const unit = factor.unit ?? 'unit';
+  const slopeLabel = slope === null ? null : spec.formatDiff(slope);
   const slopeText =
-    slope === null
+    slopeLabel === null || slopeLabel.startsWith('±')
       ? ''
-      : ` About ${spec.formatDiff(slope)} per ${unit}.`;
+      : ` About ${slopeLabel} per ${factor.unit ?? 'unit'}.`;
 
   const sentence =
     rho === null || Math.abs(rho) < 1e-9
@@ -546,7 +551,7 @@ export function buildWaitingRows(
       const remaining = Math.max(0, need - have);
       return {
         key: entry.slug,
-        label: entry.label ?? entry.slug,
+        label: entry.label ?? titleCase(entry.slug),
         have,
         need,
         progressText:
@@ -571,18 +576,21 @@ export function buildWaitingRows(
  * one spurious "finding" more often than not, and a reader who is not told how
  * many were run has no way to discount the one they are looking at.
  */
-export function multiplicityNote(response: FactorsResponse | undefined): string | null {
+export function multiplicityNote(
+  response: FactorsResponse | undefined,
+  /** `analytics.fdr_q`, used only when the response does not state its own. */
+  fallbackAlpha?: number | null,
+): string | null {
   const compared = response?.factors?.length ?? 0;
   if (compared === 0) return null;
 
   const subject = `We compared ${compared} ${plural(compared, 'tag')}`;
   const correction = correctionName(response?.method?.correction);
-  const alpha = response?.method?.alpha;
+  const alpha = finite(response?.method?.alpha ?? null) ?? finite(fallbackAlpha ?? null);
 
   if (!correction) return `${subject}.`;
-  if (alpha === undefined || alpha === null || !Number.isFinite(alpha)) {
-    return `${subject}; adjusted with ${correction}.`;
-  }
+  if (alpha === null) return `${subject}; adjusted with ${correction}.`;
+
   const rate = Number((alpha * 100).toFixed(alpha * 100 < 1 ? 1 : 0));
   return `${subject}; adjusted with ${correction} at a ${rate}% false discovery rate.`;
 }

@@ -317,3 +317,40 @@ export function LogoutIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/* -- Media and viewport ---------------------------------------------------- */
+
+/** Filled triangle: a play affordance reads better solid than outlined. */
+export function PlayIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M8 5.4v13.2l10.5-6.6Z" fill="currentColor" stroke="currentColor" strokeWidth={1.5} />
+    </Icon>
+  );
+}
+
+export function PauseIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M9 5v14M15 5v14" strokeWidth={2.25} />
+    </Icon>
+  );
+}
+
+/** Arrows pushing outwards — enter full screen. */
+export function ExpandIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M9 4H4v5M20 9V4h-5M15 20h5v-5M4 15v5h5" />
+    </Icon>
+  );
+}
+
+/** Arrows pulling inwards — leave full screen. */
+export function CollapseIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4 9h5V4M20 9h-5V4M15 20v-5h5M9 20v-5H4" />
+    </Icon>
+  );
+}

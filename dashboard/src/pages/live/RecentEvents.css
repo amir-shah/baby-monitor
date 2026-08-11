@@ -7,7 +7,7 @@
   gap: var(--space-1);
 }
 
-.event-row {
+.live-event {
   display: flex;
   align-items: flex-start;
   gap: var(--space-2);
@@ -15,14 +15,14 @@
   border-top: var(--border-width) solid var(--border-subtle);
 }
 
-.event-row:first-child {
+.live-event:first-child {
   border-top: 0;
   padding-top: 0;
 }
 
 /* The play column keeps its width whether or not there is a clip, so the
    times stay in a straight line down the list. */
-.event-row__play {
+.live-event__play {
   flex: 0 0 auto;
   inline-size: 2.25rem;
   min-block-size: 2.25rem;
@@ -31,7 +31,7 @@
   justify-content: center;
 }
 
-.event-row__body {
+.live-event__body {
   flex: 1 1 auto;
   min-inline-size: 0;
   display: flex;
@@ -40,7 +40,7 @@
   padding-block: var(--space-1);
 }
 
-.event-row__line {
+.live-event__line {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -48,14 +48,14 @@
   min-inline-size: 0;
 }
 
-.event-row__time {
+.live-event__time {
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
   font-size: var(--text-sm);
   flex: 0 0 auto;
 }
 
-.event-row__label {
+.live-event__label {
   font-weight: var(--weight-medium);
   color: var(--text);
   overflow: hidden;
@@ -64,7 +64,7 @@
   min-inline-size: 0;
 }
 
-.event-row__meta {
+.live-event__meta {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1) var(--space-3);
@@ -72,17 +72,17 @@
   color: var(--text-muted);
 }
 
-.event-row__meta:empty {
+.live-event__meta:empty {
   display: none;
 }
 
-.event-row__clip {
+.live-event__clip {
   color: var(--text-subtle);
 }
 
 /* A false positive stays visible — it is part of the record — but reads as
    struck out rather than merely faded, so it is not mistaken for low contrast. */
-.event-row.is-dismissed .event-row__label {
+.live-event.is-dismissed .live-event__label {
   text-decoration: line-through;
   color: var(--text-muted);
   font-weight: var(--weight-normal);

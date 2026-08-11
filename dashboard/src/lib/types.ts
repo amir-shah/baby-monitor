@@ -1041,6 +1041,20 @@ export interface EffectiveConfig {
   [key: string]: unknown;
 }
 
+/**
+ * The actual body of `GET /api/config`.
+ *
+ * `docs/API.md` describes the endpoint as returning the effective config, but
+ * the service wraps it: `pi/babymon/api/routers/system.py:116` returns
+ * `{"config": …, "warnings": […]}`. `system.config()` normalises both shapes
+ * to this one, so callers always read `data.config.<section>` and never have
+ * to know which shape came back.
+ */
+export interface ConfigResponse {
+  config: EffectiveConfig;
+  warnings: string[];
+}
+
 export interface RecomputeRequest {
   from?: NightOf;
   to?: NightOf;

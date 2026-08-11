@@ -54,6 +54,11 @@ export function NotesTimeline({
   activeTags,
 }: NotesTimelineProps) {
   const groups = groupNotesByNight(notes);
+  // "Tonight" and "Last night" are relative to the child's own day boundary,
+  // not the default noon, or a household that rolls over at 4am reads dates
+  // where it expects words.
+  const labelOf = (night: string): string =>
+    nightLabel(night, { tz: timezone, boundaryHour });
 
   if (groups.length === 0) {
     return (
@@ -70,10 +75,10 @@ export function NotesTimeline({
   return (
     <div className="timeline">
       {groups.map((group) => (
-        <section className="timeline__group" key={group.nightOf} aria-label={nightLabel(group.nightOf)}>
+        <section className="timeline__group" key={group.nightOf} aria-label={labelOf(group.nightOf)}>
           <header className="timeline__heading">
             <h3 className="timeline__night">
-              <Link to={`/night/${group.nightOf}`}>{nightLabel(group.nightOf)}</Link>
+              <Link to={`/night/${group.nightOf}`}>{labelOf(group.nightOf)}</Link>
             </h3>
             <span className="timeline__date" data-numeric>
               {group.nightOf}
@@ -122,7 +127,7 @@ export function NotesTimeline({
                           </button>
                           <IconButton
                             label={`Delete the note from ${
-                              note.ts_ms ? formatClock(note.ts_ms, { tz: timezone }) : nightLabel(note.night_of)
+                              note.ts_ms ? formatClock(note.ts_ms, { tz: timezone }) : labelOf(note.night_of)
                             }`}
                             icon={<TrashIcon size={17} />}
                             size="sm"

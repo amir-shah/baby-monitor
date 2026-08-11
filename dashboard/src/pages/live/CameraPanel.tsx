@@ -18,12 +18,11 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button } from '../../components';
+import { Button, CollapseIcon, ExpandIcon } from '../../components';
 import { CameraIcon, OfflineIcon, RefreshIcon } from '../../components/Icons';
 import { IconButton } from '../../components/IconButton';
 import { media } from '../../lib/api';
 import { formatDurationSeconds } from '../../lib/format';
-import { CollapseIcon, ExpandIcon } from './LiveIcons';
 import './CameraPanel.css';
 
 type Mode = 'mjpeg' | 'snapshot' | 'offline';

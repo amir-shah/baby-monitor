@@ -259,16 +259,36 @@ function TrendChart({
     [points, response, targetBand, domainX],
   );
 
+  /**
+   * The data sets the scale; the target band may widen it, but only so far.
+   *
+   * A guideline band can sit a long way from where a particular child actually
+   * is, and letting it drive the axis squashes the line into a flat smear at
+   * the top of the panel — the reader loses the real signal to make room for a
+   * reference. So the band may pull the axis out by at most one data span on
+   * each side, and anything past that is drawn clipped instead.
+   */
   const domainY = useMemo<[number, number]>(() => {
     const values: (number | null)[] = [];
     for (const point of points) {
       values.push(point.value ?? null, point.rolling_median ?? null);
     }
     for (const spread of spreads) values.push(spread.low, spread.high);
-    for (const step of steps) values.push(step.low, step.high);
-    const range = extent(values, { pad: 0.08 });
-    if (!range) return [0, 1];
-    const nice = niceDomain(range, 3);
+
+    const dataRange = extent(values, { pad: 0.08 });
+    if (!dataRange) return [0, 1];
+
+    let low = dataRange[0];
+    let high = dataRange[1];
+    if (steps.length > 0) {
+      const span = Math.max(high - low, Math.abs(high) * 0.05, 1e-9);
+      const bandLow = Math.min(...steps.map((step) => step.low));
+      const bandHigh = Math.max(...steps.map((step) => step.high));
+      low = Math.min(low, Math.max(bandLow, low - span));
+      high = Math.max(high, Math.min(bandHigh, high + span));
+    }
+
+    const nice = niceDomain([low, high], 3);
     return [nice[0], nice[1]];
   }, [points, spreads, steps]);
 
@@ -290,7 +310,15 @@ function TrendChart({
   }
 
   const yTicks = y.ticks(3);
+  // Grid on every tick, a label on every other one when they would crowd.
+  const labelStride = yTicks.length > 4 ? 2 : 1;
   const xTicks = x.ticks(width < 340 ? 2 : 3);
+
+  const plotTop = MARGIN.top;
+  const plotBottom = MARGIN.top + innerHeight;
+  const clampY = (value: number): number => Math.min(plotBottom, Math.max(plotTop, value));
+  const clampX = (value: number): number =>
+    Math.min(MARGIN.left + innerWidth, Math.max(MARGIN.left, value));
 
   const linePoints = points.map((point) => ({
     x: x(point.ts_ms),
@@ -333,20 +361,27 @@ function TrendChart({
         aria-label={`${panel.title}, weekly, from ${panel.format(points[0]?.value)} to ${panel.format(points[points.length - 1]?.value)}.`}
       >
         {/* Target band, behind everything, stepped. */}
-        {steps.map((step) => (
-          <rect
-            key={`band-${step.from}`}
-            className="trend__band"
-            x={x(step.from)}
-            y={y(step.high)}
-            width={Math.max(1, x(step.to) - x(step.from))}
-            height={Math.max(1, y(step.low) - y(step.high))}
-          />
-        ))}
+        {steps.map((step) => {
+          const x0 = clampX(x(step.from));
+          const x1 = clampX(x(step.to));
+          const yTop = clampY(y(step.high));
+          const yBottom = clampY(y(step.low));
+          if (x1 - x0 <= 0 || yBottom - yTop <= 0) return null;
+          return (
+            <rect
+              key={`band-${step.from}`}
+              className="trend__band"
+              x={x0}
+              y={yTop}
+              width={x1 - x0}
+              height={yBottom - yTop}
+            />
+          );
+        })}
         {steps.length > 0 ? (
           <>
-            <path className="trend__band-edge" d={stepEdge(steps, x, y, 'high')} />
-            <path className="trend__band-edge" d={stepEdge(steps, x, y, 'low')} />
+            <path className="trend__band-edge" d={stepEdge(steps, x, y, 'high', clampX, clampY)} />
+            <path className="trend__band-edge" d={stepEdge(steps, x, y, 'low', clampX, clampY)} />
           </>
         ) : null}
 
@@ -359,9 +394,11 @@ function TrendChart({
               x2={MARGIN.left + innerWidth}
               y2={y(tick)}
             />
-            <text className="trend__y-label" x={MARGIN.left - 6} y={y(tick) + 3} textAnchor="end">
-              {panel.format(tick)}
-            </text>
+            {yTicks.indexOf(tick) % labelStride === 0 ? (
+              <text className="trend__y-label" x={MARGIN.left - 6} y={y(tick) + 3} textAnchor="end">
+                {panel.format(tick)}
+              </text>
+            ) : null}
           </g>
         ))}
 
@@ -500,14 +537,22 @@ function mergeSteps(steps: BandStep[]): BandStep[] {
   return merged;
 }
 
-/** A stepped polyline along one edge of the band. */
-function stepEdge(steps: BandStep[], x: Scale, y: Scale, edge: 'low' | 'high'): string {
+/** A stepped polyline along one edge of the band, clipped to the plot area. */
+function stepEdge(
+  steps: BandStep[],
+  x: Scale,
+  y: Scale,
+  edge: 'low' | 'high',
+  clampX: (value: number) => number,
+  clampY: (value: number) => number,
+): string {
   let path = '';
   steps.forEach((step, index) => {
-    const value = y(step[edge]);
-    const x0 = x(step.from);
-    const x1 = x(step.to);
-    path += index === 0 ? `M${x0.toFixed(2)} ${value.toFixed(2)}` : `L${x0.toFixed(2)} ${value.toFixed(2)}`;
+    const value = clampY(y(step[edge]));
+    const x0 = clampX(x(step.from));
+    const x1 = clampX(x(step.to));
+    path +=
+      index === 0 ? `M${x0.toFixed(2)} ${value.toFixed(2)}` : `L${x0.toFixed(2)} ${value.toFixed(2)}`;
     path += `L${x1.toFixed(2)} ${value.toFixed(2)}`;
   });
   return path;

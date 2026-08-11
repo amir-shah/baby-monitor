@@ -47,9 +47,9 @@ import {
 } from '../lib/format';
 import {
   epochForNightTime,
-  minutesOfDay,
   minutesToTimeInput,
   timeInputToMinutes,
+  timeInputValue,
 } from '../lib/localTime';
 import { tagLabel, toTagInput, VALUE_TYPE_HINTS, VALUE_TYPE_LABELS } from '../lib/notesModel';
 import { TAG_CATEGORIES, TAG_VALUE_TYPES } from '../lib/types';
@@ -146,9 +146,7 @@ export function NoteComposer({
     if (!note) return 'now';
     return note.ts_ms === null ? 'night' : 'at';
   });
-  const [timeValue, setTimeValue] = useState(() =>
-    note?.ts_ms ? minutesToTimeInput(minutesOfDay(note.ts_ms, timezone)) : '',
-  );
+  const [timeValue, setTimeValue] = useState(() => timeInputValue(note?.ts_ms, timezone));
   const [whenOpen, setWhenOpen] = useState(false);
   /** Left false while the user has not touched the time, so an edit that only
    *  changes the wording keeps the original timestamp to the millisecond. */
@@ -529,6 +527,7 @@ export function NoteComposer({
         night={night}
         onNightChange={setNightOverride}
         timezone={timezone}
+        boundaryHour={boundaryHour}
         existingTs={note?.ts_ms ?? null}
       />
 
@@ -683,6 +682,7 @@ function WhenControl({
   night,
   onNightChange,
   timezone,
+  boundaryHour,
   existingTs,
 }: {
   open: boolean;
@@ -694,8 +694,10 @@ function WhenControl({
   night: NightOf;
   onNightChange: (night: NightOf) => void;
   timezone?: Timezone | null;
+  boundaryHour: number;
   existingTs: number | null;
 }) {
+  const label = nightLabel(night, { tz: timezone, boundaryHour });
   const summary =
     mode === 'night'
       ? 'the night as a whole'
@@ -713,7 +715,7 @@ function WhenControl({
       >
         <ClockIcon size={15} />
         <span>
-          {nightLabel(night)} · {summary}
+          {label} · {summary}
         </span>
         <ChevronDownIcon size={16} className={open ? 'composer__caret is-open' : 'composer__caret'} />
       </button>
@@ -787,7 +789,7 @@ function WhenControl({
                 onClick={() => onNightChange(shiftNightOf(night, 1))}
               />
             </div>
-            <p className="field__hint">{nightLabel(night)}</p>
+            <p className="field__hint">{label}</p>
           </div>
         </div>
       ) : null}

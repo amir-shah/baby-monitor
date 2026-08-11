@@ -50,8 +50,20 @@ export interface MetricSpec {
   formatBound: (value: number | null | undefined) => string;
   /** An unsigned difference with its unit: "18 min". */
   formatMagnitude: (value: number | null | undefined) => string;
-  /** Sentence fragment for a move down / up: "less total sleep". */
+  /** An unsigned difference with no unit at all: "18". */
+  formatBare: (value: number | null | undefined) => string;
+  /**
+   * Standalone fragment for a move down / up: "less total sleep". Reads after
+   * "went with" or on its own as an axis caption.
+   */
   phrase: (direction: 'down' | 'up') => string;
+  /**
+   * The same idea sized, ready to follow "averaged": "18 min less total
+   * sleep". Not simply magnitude + phrase, because English will not have it —
+   * "1.2 wakes fewer awakenings" needs the unit folded into the noun, and "10.7
+   * pts a lower night score" needs the article dropped.
+   */
+  gap: (value: number, direction: 'down' | 'up') => string;
 }
 
 interface SpecInput {
@@ -66,6 +78,9 @@ interface SpecInput {
   diffScale?: number;
   down: string;
   up: string;
+  /** Overrides for the sized fragment. Given the magnitude with and without its unit. */
+  gapDown?: (magnitude: string, bare: string) => string;
+  gapUp?: (magnitude: string, bare: string) => string;
   formatValue: (value: number | null | undefined) => string;
 }
 
@@ -86,6 +101,16 @@ function makeSpec(input: SpecInput): MetricSpec {
   const scale = input.diffScale ?? 1;
   const suffix = input.unit ? ` ${input.unit}` : '';
 
+  const bare = (value: number | null | undefined): string =>
+    isMissing(value)
+      ? EM_DASH
+      : formatNumber(Math.abs(Number((value * scale).toFixed(digits))), { digits });
+  const magnitude = (value: number | null | undefined): string =>
+    isMissing(value) ? EM_DASH : `${bare(value)}${suffix}`;
+
+  const gapDown = input.gapDown ?? ((size: string) => `${size} ${input.down}`);
+  const gapUp = input.gapUp ?? ((size: string) => `${size} ${input.up}`);
+
   return {
     key: input.key,
     label: input.label,
@@ -96,11 +121,13 @@ function makeSpec(input: SpecInput): MetricSpec {
     formatBound: (value) => (isMissing(value) ? EM_DASH : signedNumber(value * scale, digits)),
     formatDiff: (value) =>
       isMissing(value) ? EM_DASH : `${signedNumber(value * scale, digits)}${suffix}`,
-    formatMagnitude: (value) =>
-      isMissing(value)
-        ? EM_DASH
-        : `${formatNumber(Math.abs(Number((value * scale).toFixed(digits))), { digits })}${suffix}`,
+    formatMagnitude: magnitude,
+    formatBare: bare,
     phrase: (direction) => (direction === 'down' ? input.down : input.up),
+    gap: (value, direction) =>
+      direction === 'down'
+        ? gapDown(magnitude(value), bare(value))
+        : gapUp(magnitude(value), bare(value)),
   };
 }
 
@@ -119,6 +146,8 @@ export const METRIC_SPECS: readonly MetricSpec[] = [
     digits: 1,
     down: 'a lower night score',
     up: 'a higher night score',
+    gapDown: (size) => `${size} lower on the night score`,
+    gapUp: (size) => `${size} higher on the night score`,
     formatValue: formatScore,
   }),
   makeSpec({
@@ -172,6 +201,10 @@ export const METRIC_SPECS: readonly MetricSpec[] = [
     digits: 1,
     down: 'fewer awakenings',
     up: 'more awakenings',
+    // The unit word belongs inside the noun here: "1.2 fewer awakenings",
+    // never "1.2 wakes fewer awakenings".
+    gapDown: (_size, bare) => `${bare} fewer awakenings`,
+    gapUp: (_size, bare) => `${bare} more awakenings`,
     formatValue: formatCount,
   }),
   makeSpec({
@@ -182,6 +215,8 @@ export const METRIC_SPECS: readonly MetricSpec[] = [
     better: 'higher',
     down: 'a shorter longest stretch',
     up: 'a longer longest stretch',
+    gapDown: (size) => `${size} shorter in the longest stretch`,
+    gapUp: (size) => `${size} longer in the longest stretch`,
     formatValue: (value) => formatDuration(value),
   }),
 ];
@@ -201,6 +236,8 @@ export const MIDPOINT_SPEC: MetricSpec = makeSpec({
   better: 'higher',
   down: 'an earlier midpoint',
   up: 'a later midpoint',
+  gapDown: (size) => `${size} earlier at the midpoint`,
+  gapUp: (size) => `${size} later at the midpoint`,
   formatValue: (value) => formatMinuteOfDay(value),
 });
 

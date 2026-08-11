@@ -15,8 +15,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { children as childrenApi, state as stateApi, system } from '../../lib/api';
+import { state as stateApi } from '../../lib/api';
 import type { StreamStatus } from '../../lib/api';
+import { useChildren, pickActiveChild } from '../../hooks/useChildren';
+import { useConfig, resolveTimezone } from '../../hooks/useConfig';
 import { useEventStream } from '../../hooks/useEventStream';
 import type { StreamSubscribe } from '../../hooks/useEventStream';
 import { nightOf as computeNightOf, setDefaultTimezone } from '../../lib/format';
@@ -158,16 +160,9 @@ export function useLiveState(now: number): LiveData {
 
   // -- Which child ---------------------------------------------------------
 
-  const childrenQuery = useQuery({
-    queryKey: ['children'],
-    queryFn: ({ signal }) => childrenApi.list({}, signal),
-    staleTime: 5 * 60_000,
-  });
+  const childrenQuery = useChildren();
 
-  const child = useMemo(() => {
-    const items = childrenQuery.data?.items ?? [];
-    return items.find((candidate) => candidate.active) ?? items[0];
-  }, [childrenQuery.data]);
+  const child = useMemo(() => pickActiveChild(childrenQuery.data?.items), [childrenQuery.data]);
 
   // Every wall-clock formatter on this page reads the child's zone, not the
   // phone's — a parent checking in from another timezone still wants the
@@ -178,11 +173,7 @@ export function useLiveState(now: number): LiveData {
 
   // -- Config (the comfort band, mostly) -----------------------------------
 
-  const configQuery = useQuery({
-    queryKey: ['config'],
-    queryFn: ({ signal }) => system.config(signal),
-    staleTime: 10 * 60_000,
-  });
+  const configQuery = useConfig();
 
   // -- The push channel ----------------------------------------------------
 
@@ -240,7 +231,7 @@ export function useLiveState(now: number): LiveData {
 
   // -- Derived -------------------------------------------------------------
 
-  const timezone = child?.timezone ?? configQuery.data?.site?.timezone ?? null;
+  const timezone = resolveTimezone(child, configQuery.data?.config);
 
   const nightOfValue =
     live?.night_of ??
@@ -257,7 +248,7 @@ export function useLiveState(now: number): LiveData {
     childId: child?.id ?? live?.child_id,
     nightOf: nightOfValue,
     timezone,
-    config: configQuery.data,
+    config: configQuery.data?.config,
     isFirstLoad: live === undefined && stateQuery.isPending,
     error: live === undefined ? (stateQuery.error ?? childrenQuery.error) : stateQuery.error,
     receivedAt: dataUpdatedAt > 0 ? dataUpdatedAt : null,

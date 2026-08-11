@@ -15,6 +15,30 @@ export type { CardProps } from './Card';
 export { Chip } from './Chip';
 export type { ChipProps } from './Chip';
 
+export { ClipPlayer } from './ClipPlayer';
+export type { ClipPlayerProps } from './ClipPlayer';
+
+export { EventLabelPicker } from './EventLabelPicker';
+export type { EventLabelPickerProps } from './EventLabelPicker';
+
+export { InfoTip } from './InfoTip';
+export type { InfoTipProps } from './InfoTip';
+
+export { NightAdjustDialog } from './NightAdjustDialog';
+export type { NightAdjustDialogProps } from './NightAdjustDialog';
+
+export { NightMetrics } from './NightMetrics';
+export type { NightMetricsProps } from './NightMetrics';
+
+export { NightNotesPanel } from './NightNotesPanel';
+export type { NightNotesPanelProps } from './NightNotesPanel';
+
+export { NightQualityScore } from './NightQualityScore';
+export type { NightQualityScoreProps } from './NightQualityScore';
+
+export { NightTimeline } from './NightTimeline';
+export type { NightTimelineProps } from './NightTimeline';
+
 export { EmptyState } from './EmptyState';
 export type { EmptyStateProps } from './EmptyState';
 

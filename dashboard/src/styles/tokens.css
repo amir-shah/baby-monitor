@@ -123,7 +123,7 @@
   --text: #15171d;
   --text-secondary: #414653;
   --text-muted: #5c6272; /* 5.9:1 on --bg */
-  --text-subtle: #767d8e; /* decorative only; never the sole carrier */
+  --text-subtle: #666d7c; /* 4.5:1 on every light surface, incl. --surface-3 */
   --text-inverse: #ffffff;
   --text-link: #2f4bc4;
 
@@ -248,7 +248,7 @@
     --text: #e6e8ef; /* 15.5:1 on --bg. Not pure white: less glare. */
     --text-secondary: #b6bcca;
     --text-muted: #929aab; /* 7.4:1 on --bg */
-    --text-subtle: #6d7486; /* 4.6:1 — decorative only */
+    --text-subtle: #7d8495; /* 4.6:1 on every dark surface, incl. --surface-3 */
     --text-inverse: #06070a;
     --text-link: #9aabff;
 
@@ -354,7 +354,7 @@
   --text: #e6e8ef;
   --text-secondary: #b6bcca;
   --text-muted: #929aab;
-  --text-subtle: #6d7486;
+  --text-subtle: #7d8495;
   --text-inverse: #06070a;
   --text-link: #9aabff;
 
@@ -460,7 +460,7 @@
   --text: #15171d;
   --text-secondary: #414653;
   --text-muted: #5c6272;
-  --text-subtle: #767d8e;
+  --text-subtle: #666d7c;
   --text-inverse: #ffffff;
   --text-link: #2f4bc4;
 
