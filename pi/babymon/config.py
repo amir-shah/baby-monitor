@@ -904,6 +904,13 @@ def _validate(cfg: Config) -> None:
         errors.append("audio.sample_rate must be positive")
     if cfg.audio.hop_s <= 0 or cfg.audio.frame_s <= 0:
         errors.append("audio.frame_s and audio.hop_s must be positive")
+    if cfg.audio.detector.cooldown_s <= cfg.audio.detector.merge_gap_s:
+        cfg.warn(
+            f"audio.detector.cooldown_s ({cfg.audio.detector.cooldown_s}s) is inside "
+            f"merge_gap_s ({cfg.audio.detector.merge_gap_s}s), so a repeat of the same "
+            "sound is merged before the cooldown can apply and it only ever affects a "
+            "different sound"
+        )
     if cfg.audio.hop_s > cfg.audio.frame_s:
         cfg.warn("audio.hop_s exceeds audio.frame_s: analysis frames will have gaps between them")
     if cfg.audio.detector.off_db_above_floor >= cfg.audio.detector.on_db_above_floor:

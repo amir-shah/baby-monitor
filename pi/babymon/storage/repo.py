@@ -1226,6 +1226,35 @@ class MediaRepo:
 # ---------------------------------------------------------------------------
 
 
+def _carve_out(
+    start: int, end: int, holes: Sequence[tuple[int, int]]
+) -> list[tuple[int, int]]:
+    """``[start, end)`` with every hole removed, as the pieces that survive.
+
+    A hole in the middle splits the segment in two; one covering it entirely
+    leaves nothing. Used to keep a manual correction and the detector's
+    disagreeing version of the same minutes from both ending up in the
+    hypnogram, which the metrics assume cannot happen.
+    """
+    pieces = [(start, end)]
+    for hole_start, hole_end in holes:
+        if hole_end <= hole_start:
+            continue
+        out: list[tuple[int, int]] = []
+        for piece_start, piece_end in pieces:
+            if hole_end <= piece_start or hole_start >= piece_end:
+                out.append((piece_start, piece_end))
+                continue
+            if piece_start < hole_start:
+                out.append((piece_start, hole_start))
+            if hole_end < piece_end:
+                out.append((hole_end, piece_end))
+        pieces = out
+        if not pieces:
+            break
+    return [(a, b) for a, b in pieces if b > a]
+
+
 class SegmentRepo:
     def __init__(self, db: Database) -> None:
         self.db = db
@@ -1270,31 +1299,45 @@ class SegmentRepo:
         """Swap in a freshly computed hypnogram, keeping manual segments.
 
         Manual segments are the user saying "he was actually awake here"; a
-        recompute must never throw that away.
+        recompute must never throw that away — and must not leave the detector's
+        own version of those minutes sitting underneath it either. Keeping both
+        puts the same minutes in the hypnogram twice, once asleep and once
+        awake: the metrics count the sleep again, TST can exceed the sleep
+        period that contains it, and the correction the user made has no
+        visible effect at all. The detector's segments are therefore carved
+        around the manual ones.
         """
         ts = now_ms()
         with self.db.transaction() as conn:
+            manual = [
+                (int(r["start_ms"]), int(r["end_ms"]))
+                for r in conn.execute(
+                    "SELECT start_ms, end_ms FROM sleep_segments "
+                    "WHERE child_id = ? AND night_of = ? AND source = 'manual' "
+                    "ORDER BY start_ms",
+                    (child_id, night_of),
+                ).fetchall()
+            ]
             conn.execute(
                 "DELETE FROM sleep_segments WHERE child_id = ? AND night_of = ? "
                 "AND source != 'manual'",
                 (child_id, night_of),
             )
+            written = [
+                (child_id, night_of, start, end, str(s.state), s.confidence, s.source, ts)
+                for s in segments
+                if s.source != "manual"
+                for start, end in _carve_out(s.start_ms, s.end_ms, manual)
+            ]
             conn.executemany(
                 """
                 INSERT INTO sleep_segments (child_id, night_of, start_ms, end_ms, state,
                                             confidence, source, created_ms)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                [
-                    (
-                        child_id, night_of, s.start_ms, s.end_ms, str(s.state),
-                        s.confidence, s.source, ts,
-                    )
-                    for s in segments
-                    if s.source != "manual"
-                ],
+                written,
             )
-        return len(segments)
+        return len(written)
 
     def add_manual(
         self, child_id: int, night_of: str, start_ms: int, end_ms: int, state: SleepState

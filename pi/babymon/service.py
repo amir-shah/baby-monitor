@@ -63,6 +63,9 @@ __all__ = ["SensingRuntime"]
 #: bound on how much of a night an unexpected power cut can take with it.
 SEGMENT_FLUSH_MS = 5 * 60_000
 
+#: Settings key holding the last local date housekeeping completed on.
+_MAINTENANCE_KEY = "maintenance.last_run_date"
+
 #: Free space on the data volume below which the health page goes red. Months
 #: of clips on a small card is the ordinary way this device stops working.
 LOW_DISK_MB = 200.0
@@ -136,7 +139,11 @@ class SensingRuntime:
         self._open_sound_event_id: int | None = None
         self._open_motion_event_id: int | None = None
         self._lock = threading.Lock()
-        self._last_maintenance_day: str | None = None
+        # Remembered across restarts. Held only in memory, a Pi that reboots
+        # after the scheduled hour would prune, back up and VACUUM on every
+        # start; forgotten entirely, one that reboots before it would never
+        # run at all. One settings row settles both.
+        self._last_maintenance_day: str | None = repos.settings.get(_MAINTENANCE_KEY)
         self._last_segment_flush_ms = 0
 
     # -- lifecycle ----------------------------------------------------------
@@ -163,8 +170,25 @@ class SensingRuntime:
     def stop(self) -> None:
         log.info("stopping sensing service")
         self._stop.set()
+
+        # Close the sensors *before* joining. The audio loop blocks inside
+        # AudioCapture.frames(), which watches the capture's own stop event and
+        # knows nothing about this one, so joining first meant waiting out the
+        # full five-second timeout on every shutdown — and then doing the
+        # database work below while a thread that was never joined was still
+        # running. Closing first ends the blocking iterators, so the joins
+        # return at once and finish before anything else touches the database.
+        if self.capture is not None:
+            self.capture.stop()
+        if self.source is not None:
+            self.source.close()
+        if self.env_sensor is not None:
+            self.env_sensor.close()
+
         for thread in self._threads:
             thread.join(timeout=5)
+            if thread.is_alive():
+                log.warning("%s did not stop within five seconds", thread.name)
         self._threads.clear()
 
         ts = now_ms()
@@ -174,12 +198,6 @@ class SensingRuntime:
                 self._record_sound_event(event)
         if self.motion is not None:
             self.motion.flush(ts)
-        if self.capture is not None:
-            self.capture.stop()
-        if self.source is not None:
-            self.source.close()
-        if self.env_sensor is not None:
-            self.env_sensor.close()
 
         # Close anything the detectors left open so the log has no dangling rows.
         self.repos.events.close_stale(self.child.id, ts + 1, ts)
@@ -623,6 +641,11 @@ class SensingRuntime:
         # a Pi on a shelf in a child's room — lost the whole night. Snapshots
         # are non-destructive and each replaces the last, so writing one every
         # few minutes costs a handful of rows and bounds the loss to that.
+        # Checked every tick rather than only at the day boundary, or a
+        # retention.run_at later in the day than the boundary would never come
+        # round at all.
+        self._maintenance(ts)
+
         if ts - self._last_segment_flush_ms >= SEGMENT_FLUSH_MS:
             self._last_segment_flush_ms = ts
             try:
@@ -690,7 +713,6 @@ class SensingRuntime:
                 self.bus.publish(Topic.NIGHT, {"night_of": night.night_of}, child_id=self.child.id)
         except Exception:
             log.exception("could not finalise the night of %s", previous)
-        self._maintenance(new_night)
 
     def _flush_segments(self, ts: int, *, final: bool = False) -> None:
         """Write the night's hypnogram to the database.
@@ -728,10 +750,42 @@ class SensingRuntime:
             ],
         )
 
-    def _maintenance(self, today: str) -> None:
+    def _past_maintenance_hour(self, ts_ms: int) -> bool:
+        """Whether local time has reached ``retention.run_at`` today."""
+        from .timeutil import from_ms, parse_hhmm
+
+        try:
+            at = parse_hhmm(self.config.retention.run_at)
+        except ValueError:
+            return True  # a bad value should not stop housekeeping for ever
+        local = from_ms(ts_ms, self.child.timezone)
+        return (local.hour, local.minute) >= (at.hour, at.minute)
+
+    def _maintenance(self, ts_ms: int) -> None:
+        """Run the nightly housekeeping, once a day, at the configured hour.
+
+        ``retention.run_at`` was validated by the config loader and then never
+        read: maintenance ran at the day boundary, which defaults to noon.
+        Pruning and a VACUUM in the middle of the day is not a disaster, but a
+        setting the documentation offers and the code ignores is worse than no
+        setting — the operator moves it and nothing happens.
+
+        Keyed on the local calendar date rather than the night key, because
+        those are not the same thing: with a noon boundary and an 03:30 run
+        time, one calendar day contains that hour under one night key and the
+        boundary itself under the next, and a night-keyed guard would let it
+        run twice.
+        """
+        from .timeutil import from_ms
+
+        local = from_ms(ts_ms, self.child.timezone)
+        today = local.date().isoformat()
         if self._last_maintenance_day == today:
             return
+        if not self._past_maintenance_hour(ts_ms):
+            return
         self._last_maintenance_day = today
+        self.repos.settings.set(_MAINTENANCE_KEY, today)
         try:
             from .maintenance import run_maintenance
 

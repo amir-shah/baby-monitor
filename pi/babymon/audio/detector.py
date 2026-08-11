@@ -257,12 +257,16 @@ class SoundEventDetector:
         if threshold is not None and score < threshold:
             # The class-specific bar is higher than the generic one; respect it.
             return
-        until = self._cooldown_until_ms.get(str(label))
-        if until is not None and frame.ts_ms < until:
-            return
-
-        # Reopening inside the merge window continues the previous event rather
-        # than logging a second one — one fussing spell should be one row.
+        # Merge before cooldown, and the order is the whole point.
+        #
+        # The cooldown exists to stop one noisy stretch becoming a column of
+        # near-identical rows. The merge window exists to make that stretch a
+        # single row. Checking the cooldown first means a child who starts
+        # crying again ten seconds later is refused outright — not merged into
+        # the previous event, not logged as a new one, simply gone. With the
+        # shipped defaults (cooldown 15 s, merge 20 s) that silently swallowed
+        # every resumption in the first fifteen seconds and left a five-second
+        # window in which merging could happen at all.
         previous = self._last_emitted
         if (
             previous is not None
@@ -274,6 +278,10 @@ class SoundEventDetector:
             self._current.end_ms = None
             self._last_emitted = None
         else:
+            # A genuinely new event, so the cooldown applies.
+            until = self._cooldown_until_ms.get(str(label))
+            if until is not None and frame.ts_ms < until:
+                return
             self._current = SoundEvent(
                 start_ms=frame.ts_ms,
                 label=label,

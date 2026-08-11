@@ -214,3 +214,79 @@ class TestThrottleBookkeeping:
         assert throttle.retry_after_s("10.0.0.3") > 0
         throttle.record_success("10.0.0.3")
         assert throttle.retry_after_s("10.0.0.3") == 0.0
+
+
+class TestLogoutRevokes:
+    """Clearing the cookie in the browser is not the same as ending the session.
+
+    The token is a signed timestamp, so a copy captured beforehand — from a
+    shared machine, a proxy log, a borrowed phone — kept working for the full
+    session_days no matter how many times the owner pressed Log out.
+    """
+
+    @staticmethod
+    def stolen_from_yesterday(auth, monkeypatch):
+        """A session minted well before the sign-out, as a captured one would be."""
+        monkeypatch.setattr(
+            TimestampSigner, "get_timestamp", lambda self: int(time.time()) - 3600
+        )
+        token = auth.issue_session()
+        monkeypatch.undo()
+        return token
+
+    def test_a_captured_cookie_stops_working_after_logout(self, repos, config, monkeypatch):
+        from babymon.api.auth import AuthManager
+
+        config.api.auth.enabled = True
+        config.api.auth.secret = "test-secret"
+        auth = AuthManager(config.api.auth, repos.settings)
+
+        stolen = self.stolen_from_yesterday(auth, monkeypatch)
+        assert auth.verify_session(stolen)
+
+        assert auth.sign_out_everywhere() is True
+        assert not auth.verify_session(stolen)
+
+    def test_the_window_is_one_second_wide_and_that_is_deliberate(self, repos, config):
+        """Sessions minted in the same second as the sign-out survive it.
+
+        itsdangerous stamps whole seconds, so they cannot be told apart from
+        the sign-out itself — and the one that has to survive is the user
+        logging straight back in. An attacker holding a captured cookie cannot
+        mint a new one, so nothing is given away.
+        """
+        from babymon.api.auth import AuthManager
+
+        config.api.auth.secret = "test-secret"
+        auth = AuthManager(config.api.auth, repos.settings)
+        same_second = auth.issue_session()
+        auth.sign_out_everywhere()
+        assert auth.verify_session(same_second)
+
+    def test_a_session_issued_afterwards_is_fine(self, repos, config):
+        from babymon.api.auth import AuthManager
+
+        config.api.auth.secret = "test-secret"
+        auth = AuthManager(config.api.auth, repos.settings)
+        auth.sign_out_everywhere()
+        assert auth.verify_session(auth.issue_session())
+
+    def test_the_revocation_survives_a_restart(self, repos, config, monkeypatch):
+        from babymon.api.auth import AuthManager
+
+        config.api.auth.secret = "test-secret"
+        first = AuthManager(config.api.auth, repos.settings)
+        stolen = self.stolen_from_yesterday(first, monkeypatch)
+        first.sign_out_everywhere()
+
+        # A new process, same database. An in-memory denylist would have
+        # quietly resurrected the cookie the user just revoked.
+        second = AuthManager(config.api.auth, repos.settings)
+        assert not second.verify_session(stolen)
+
+    def test_without_a_database_it_says_so_rather_than_pretending(self, config):
+        from babymon.api.auth import AuthManager
+
+        config.api.auth.secret = "test-secret"
+        auth = AuthManager(config.api.auth)
+        assert auth.sign_out_everywhere() is False

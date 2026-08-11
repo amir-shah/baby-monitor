@@ -67,6 +67,12 @@ class Database:
     def conn(self) -> sqlite3.Connection:
         """The calling thread's connection, opened on first use."""
         conn: sqlite3.Connection | None = getattr(self._local, "conn", None)
+        if conn is not None and self._closed:
+            # close() shuts every connection but cannot reach into other
+            # threads' locals, so this one is cached and dead. Using it raises
+            # sqlite3.ProgrammingError about a closed database, which reads
+            # like corruption rather than like shutdown.
+            raise RuntimeError("database is closed")
         if conn is None:
             conn = self._connect()
             self._local.conn = conn
@@ -147,7 +153,16 @@ class Database:
         try:
             yield conn
         except BaseException:
-            conn.execute("ROLLBACK")
+            # The rollback must not become the error that gets reported. When
+            # the SD card fills, the original failure is a clear "database or
+            # disk is full" and the rollback then fails too — with "cannot
+            # rollback - no transaction is active", which says nothing about
+            # disks and sends whoever reads the journal looking in the wrong
+            # place entirely.
+            try:
+                conn.execute("ROLLBACK")
+            except sqlite3.Error as rollback_error:
+                log.debug("rollback after a failed transaction also failed: %s", rollback_error)
             raise
         conn.execute("COMMIT")
 

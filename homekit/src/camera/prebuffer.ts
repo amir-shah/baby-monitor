@@ -199,7 +199,6 @@ export class Prebuffer extends EventEmitter {
       });
 
       const socket = await sink.socket();
-      this.restartDelayMs = 1000; // a successful connect resets the backoff
       await this.consume(socket);
     } catch (err) {
       if (this.running) {
@@ -239,6 +238,14 @@ export class Prebuffer extends EventEmitter {
     }
 
     if (box.type === "moov") {
+      // Media is genuinely flowing, so the backoff has done its job.
+      //
+      // It used to reset as soon as ffmpeg connected to our own local socket,
+      // which says nothing about the camera: ffmpeg connects, finds the RTSP
+      // source down, exits, and the restart is scheduled at the reset delay
+      // again — a permanent respawn every second, for as long as the camera
+      // stays away. A moov means the source answered.
+      this.restartDelayMs = 1000;
       this.moov = Buffer.concat([box.header, box.data]);
       this.log.debug(`captured initialization segment (${this.initializationSegment()?.length} bytes)`);
       return;

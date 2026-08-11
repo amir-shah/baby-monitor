@@ -60,6 +60,8 @@ __all__ = [
 SESSION_COOKIE = "babymon_session"
 
 _SESSION_SALT = "babymon.session.v1"
+#: Settings key holding the instant before which every session is void.
+_SIGNOUT_KEY = "auth.signed_out_before"
 _MEDIA_SALT = "babymon.media.v1"
 
 #: Attempts allowed before the backoff starts biting. Three covers a genuine
@@ -176,12 +178,19 @@ class LoginThrottle:
 class AuthManager:
     """Signs and checks the three credentials, and holds the login throttle."""
 
-    def __init__(self, config: AuthConfig) -> None:
+    def __init__(self, config: AuthConfig, settings: Any = None) -> None:
         self.config = config
         secret = config.secret or "babymon-unconfigured-secret"
         self._sessions = URLSafeTimedSerializer(secret, salt=_SESSION_SALT)
         self._media = URLSafeTimedSerializer(secret, salt=_MEDIA_SALT)
         self.throttle = LoginThrottle()
+        #: Where the sign-out watermark is kept. Without it, logout deletes the
+        #: browser's copy of the cookie and nothing else, so a cookie captured
+        #: beforehand — off a shared machine, out of a proxy log — keeps working
+        #: for the full session_days. Optional so tests and tools can build an
+        #: AuthManager without a database; logout then degrades to
+        #: cookie-clearing and says so.
+        self._settings = settings
 
     # -- configuration -----------------------------------------------------
 
@@ -221,9 +230,43 @@ class AuthManager:
 
     def verify_session(self, token: str) -> bool:
         try:
-            self._sessions.loads(token, max_age=self.session_max_age_s)
+            _, issued_at = self._sessions.loads(
+                token, max_age=self.session_max_age_s, return_timestamp=True
+            )
         except (BadSignature, SignatureExpired):
             return False
+        cutoff = self._signed_out_before()
+        return not (cutoff and issued_at.timestamp() < cutoff)
+
+    def _signed_out_before(self) -> float:
+        if self._settings is None:
+            return 0.0
+        try:
+            return float(self._settings.get(_SIGNOUT_KEY) or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def sign_out_everywhere(self) -> bool:
+        """Invalidate every session issued up to now.
+
+        The token is a signed timestamp with nothing in it to revoke
+        individually, so signing out is a watermark rather than a denylist:
+        one row, no growth, and it survives a restart — which an in-memory set
+        would not, quietly resurrecting the cookie the user just revoked.
+
+        Logging out of one browser therefore logs out of all of them. On a
+        household dashboard that is the safer reading of the button anyway.
+        """
+        if self._settings is None:
+            return False
+        # Truncated to the second, and compared with a strict <, because
+        # itsdangerous stamps whole seconds. Rounding up instead would also
+        # void a token minted in the same second *after* the sign-out — which
+        # is the user logging straight back in, and their new session would be
+        # dead on arrival. Nothing is lost: the only token that can survive
+        # this is one minted in the same second, and an attacker holding a
+        # captured cookie cannot mint anything at all.
+        self._settings.set(_SIGNOUT_KEY, float(int(time.time())))
         return True
 
     def set_session_cookie(self, response: Response, token: str) -> None:
@@ -381,8 +424,10 @@ def login(request: Request, response: Response, payload: LoginRequest) -> Sessio
 
 @router.post("/logout")
 def logout(request: Request, response: Response) -> dict[str, Any]:
-    get_ctx(request).auth.clear_session_cookie(response)
-    return {"ok": True}
+    auth = get_ctx(request).auth
+    auth.clear_session_cookie(response)
+    revoked = auth.sign_out_everywhere()
+    return {"ok": True, "revoked_existing_sessions": revoked}
 
 
 @router.get("/me", response_model=SessionInfo)

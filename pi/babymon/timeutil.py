@@ -248,11 +248,25 @@ def _resolve_local(naive_local: dt.datetime, zone: dt.tzinfo) -> int:
     """
     stamp = naive_local.timestamp()
     resolved = dt.datetime.fromtimestamp(stamp, tz=dt.UTC).astimezone(zone)
-    if resolved.hour != naive_local.hour or resolved.minute != naive_local.minute:
-        # Non-existent local time (spring-forward gap): take the instant the
-        # gap ends, so the night still starts exactly once.
-        stamp = (naive_local + dt.timedelta(hours=1)).timestamp()
-    return int(stamp * MS)
+    if resolved.hour == naive_local.hour and resolved.minute == naive_local.minute:
+        return int(stamp * MS)
+
+    # A local time that never happened. Adding a fixed hour assumes every gap
+    # is an hour wide, which Lord Howe Island's is not — its transition is
+    # thirty minutes, so an hour overshoots and lands past the end of the gap,
+    # at which point night_of and night_bounds disagree about which night an
+    # instant belongs to. Measure the gap instead: the size of the jump either
+    # side of it is exactly how far forward the clock went.
+    before = dt.datetime.fromtimestamp(
+        (naive_local - dt.timedelta(hours=3)).timestamp(), tz=dt.UTC
+    ).astimezone(zone)
+    after = dt.datetime.fromtimestamp(
+        (naive_local + dt.timedelta(hours=3)).timestamp(), tz=dt.UTC
+    ).astimezone(zone)
+    gap = (after.utcoffset() or dt.timedelta()) - (before.utcoffset() or dt.timedelta())
+    if gap <= dt.timedelta():
+        gap = dt.timedelta(hours=1)
+    return int((naive_local + gap).timestamp() * MS)
 
 
 def _check_boundary(hour: int) -> None:

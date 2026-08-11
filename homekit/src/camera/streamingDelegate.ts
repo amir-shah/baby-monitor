@@ -85,6 +85,18 @@ export interface StreamingDelegateOptions {
  */
 const START_TIMEOUT_MS = 8_000;
 
+/**
+ * How long a prepared-but-unstarted session is kept.
+ *
+ * HomeKit prepares a session and then usually starts it, but not always — the
+ * user backs out of the camera tile, the phone leaves the network, the
+ * negotiation is abandoned. Nothing ever tells us, and each abandoned session
+ * holds two reserved UDP ports and its SRTP keys in a map that only ever
+ * grows. On a bridge that runs for months, that is a leak with the shape of a
+ * slow memory exhaustion.
+ */
+const PREPARED_TTL_MS = 60_000;
+
 /** Fallback image when the camera is not producing frames yet. */
 const PLACEHOLDER_JPEG = Buffer.from(
   "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a" +
@@ -97,6 +109,7 @@ export class BabymonStreamingDelegate implements CameraStreamingDelegate {
   private readonly options: StreamingDelegateOptions;
   private readonly log: Logger;
   private readonly pending = new Map<string, SessionInfo>();
+  private readonly pendingTimers = new Map<string, NodeJS.Timeout>();
   private readonly active = new Map<string, ActiveSession>();
 
   controller: CameraController | undefined;
@@ -153,6 +166,9 @@ export class BabymonStreamingDelegate implements CameraStreamingDelegate {
         audioSSRC,
       };
       this.pending.set(request.sessionID, session);
+      const expiry = setTimeout(() => this.dropPending(request.sessionID, true), PREPARED_TTL_MS);
+      expiry.unref?.();
+      this.pendingTimers.set(request.sessionID, expiry);
 
       const response: PrepareStreamResponse = {
         video: {
@@ -173,6 +189,18 @@ export class BabymonStreamingDelegate implements CameraStreamingDelegate {
     } catch (err) {
       this.log.error("failed to prepare a stream", err);
       callback(err as Error);
+    }
+  }
+
+  /** Forget a prepared session, cancelling its expiry. */
+  private dropPending(sessionId: string, expired = false): void {
+    const timer = this.pendingTimers.get(sessionId);
+    if (timer) {
+      clearTimeout(timer);
+      this.pendingTimers.delete(sessionId);
+    }
+    if (this.pending.delete(sessionId) && expired) {
+      this.log.debug(`prepared stream ${sessionId.substring(0, 8)} was never started; dropped`);
     }
   }
 
@@ -200,7 +228,7 @@ export class BabymonStreamingDelegate implements CameraStreamingDelegate {
       callback(new Error(`no prepared session ${request.sessionID}`));
       return;
     }
-    this.pending.delete(request.sessionID);
+    this.dropPending(request.sessionID);
 
     const { video, audio } = request;
     const bitrate = Math.min(video.max_bit_rate, this.options.maxBitrateKbps);
@@ -383,7 +411,17 @@ export class BabymonStreamingDelegate implements CameraStreamingDelegate {
       entry.timeout.unref();
     };
     socket.on("message", arm);
-    socket.on("error", (err) => this.log.debug(`watchdog socket: ${err.message}`));
+    // A bind failure cannot be shrugged off. The port was reserved and then
+    // released before this bind, so another process can take it in between —
+    // and a watchdog that never binds never hears RTCP, never fires, and the
+    // stream it was supposed to end runs until something else notices. That
+    // "something else" does not exist: the Home app backgrounds, the phone
+    // leaves the network, and an ffmpeg encoder stays on the Pi for ever.
+    // Ending the session is the safe failure.
+    socket.on("error", (err) => {
+      this.log.warn(`watchdog socket for ${sessionId.substring(0, 8)}: ${err.message}`);
+      this.forceStop(sessionId);
+    });
     socket.bind(port, () => arm());
     return socket;
   }
@@ -464,6 +502,10 @@ export class BabymonStreamingDelegate implements CameraStreamingDelegate {
     for (const sessionId of [...this.active.keys()]) {
       this.stopStream(sessionId);
     }
+    for (const timer of this.pendingTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.pendingTimers.clear();
     this.pending.clear();
   }
 

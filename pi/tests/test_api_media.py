@@ -149,3 +149,27 @@ def test_missing_media_id(tmp_path: Path) -> None:
     with harness.client() as client:
         assert client.get("/api/media/12345").status_code == 404
         assert client.get("/api/media/12345/meta").status_code == 404
+
+
+class TestAbsurdRangeHeaders:
+    """A malformed Range must be a 4xx or ignored, never a 500."""
+
+    def test_an_enormous_byte_count_does_not_crash(self):
+        from babymon.api.routers.media import _parse_range
+
+        # Python refuses to parse an integer literal longer than 4300 digits
+        # and raises ValueError doing it, which became a 500 from a header
+        # anybody can send.
+        assert _parse_range("bytes=0-" + "9" * 5000, 1000) is None
+
+    def test_a_long_start_offset_does_not_crash(self):
+        from babymon.api.routers.media import _parse_range
+
+        assert _parse_range("bytes=" + "9" * 5000 + "-", 1000) is None
+
+    def test_ordinary_ranges_still_parse(self):
+        from babymon.api.routers.media import _parse_range
+
+        assert _parse_range("bytes=0-99", 1000) == (0, 99)
+        assert _parse_range("bytes=-100", 1000) == (900, 999)
+        assert _parse_range("bytes=500-", 1000) == (500, 999)

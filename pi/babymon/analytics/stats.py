@@ -529,7 +529,19 @@ def cliffs_delta_ci(
         return EffectSize("cliffs_delta", delta)
     var = (n2 * n2 * sum_rows + n1 * n1 * sum_cols - sum_all) / denominator
     if var <= 0:
-        return EffectSize("cliffs_delta", delta, delta, delta, 0.0)
+        # Perfect separation: every night with the tag scored worse than every
+        # night without, so the consistent-variance estimate is exactly zero.
+        # Reporting [delta, delta] would put a zero-width 95% interval on the
+        # strongest possible finding, from ten nights — the most confident
+        # claim in the table resting on the least evidence. The one-sided
+        # rule of three gives the honest bound instead: with no counterexample
+        # in n comparisons, the truth could still be 3/n away.
+        margin = min(1.0, 3.0 / max(1, min(n1, n2)))
+        if delta > 0:
+            return EffectSize("cliffs_delta", delta, max(-1.0, delta - margin), 1.0, 0.0)
+        if delta < 0:
+            return EffectSize("cliffs_delta", delta, -1.0, min(1.0, delta + margin), 0.0)
+        return EffectSize("cliffs_delta", delta, -margin, margin, 0.0)
     sigma = sqrt(var)
 
     # The interval is built on a transformed scale so it stays inside [-1, 1].

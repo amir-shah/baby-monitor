@@ -43,7 +43,11 @@ log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/media", tags=["media"])
 
-_RANGE_RE = re.compile(r"^bytes=(\d*)-(\d*)$")
+#: A byte range. The digit counts are bounded because Python refuses to
+#: convert an integer literal longer than 4300 digits and raises ValueError
+#: doing it — so an absurd Range header became a 500 rather than the 416 or
+#: the ignored-header this deserves. 19 digits covers any real file.
+_RANGE_RE = re.compile(r"^bytes=(\d{0,19})-(\d{0,19})$")
 #: 64 KiB: large enough that the syscall overhead is irrelevant, small enough
 #: that ten clients seeking around clips do not add up to real memory on a Pi.
 _CHUNK = 64 * 1024

@@ -148,6 +148,11 @@ interface ActiveSession {
   sink?: LocalSocketSink;
   process?: FfmpegProcess;
   detach?: () => void;
+  /** Whether "stopped" has already been reported for this session. */
+  reported?: boolean;
+  startedAt?: number;
+  fragments?: number;
+  bytes?: number;
 }
 
 export class BabymonRecordingDelegate implements CameraRecordingDelegate {
@@ -235,9 +240,9 @@ export class BabymonRecordingDelegate implements CameraRecordingDelegate {
       return;
     }
 
-    const session: ActiveSession = { streamId, closed: false };
-    this.session = session;
     const startedAt = Date.now();
+    const session: ActiveSession = { streamId, closed: false, startedAt };
+    this.session = session;
     let fragmentsSent = 0;
     let bytesSent = 0;
 
@@ -301,16 +306,9 @@ export class BabymonRecordingDelegate implements CameraRecordingDelegate {
         this.log.error(`recording stream ${streamId} failed`, err);
       }
     } finally {
-      this.teardown(session);
-      if (this.session === session) {
-        this.session = undefined;
-      }
-      this.options.onRecordingStateChange?.("stopped", {
-        stream_id: streamId,
-        fragments: fragmentsSent,
-        bytes: bytesSent,
-        duration_s: (Date.now() - startedAt) / 1000,
-      });
+      session.fragments = fragmentsSent;
+      session.bytes = bytesSent;
+      this.finish(session, streamId);
     }
   }
 
@@ -560,6 +558,35 @@ export class BabymonRecordingDelegate implements CameraRecordingDelegate {
     this.log.debug(`HomeKit acknowledged recording stream ${streamId}`);
   }
 
+  /**
+   * Tear the session down and report it stopped, exactly once.
+   *
+   * Whoever gets here first wins, because the generator cannot be relied on to
+   * get here at all. An async generator suspended at a `yield` runs its
+   * `finally` only when the consumer pulls again, and on shutdown nobody does
+   * — so the recording was left hanging, the ffmpeg process was reaped by
+   * process exit rather than by us, and the timeline never received the
+   * "stopped" that pairs with the "started" it had already shown. Every
+   * shutdown during a recording left a recording that, as far as the event log
+   * was concerned, is still going.
+   */
+  private finish(session: ActiveSession, streamId: number): void {
+    this.teardown(session);
+    if (this.session === session) {
+      this.session = undefined;
+    }
+    if (session.reported) {
+      return;
+    }
+    session.reported = true;
+    this.options.onRecordingStateChange?.("stopped", {
+      stream_id: streamId,
+      fragments: session.fragments ?? 0,
+      bytes: session.bytes ?? 0,
+      duration_s: (Date.now() - (session.startedAt ?? Date.now())) / 1000,
+    });
+  }
+
   private teardown(session: ActiveSession): void {
     session.detach?.();
     session.detach = undefined;
@@ -573,10 +600,10 @@ export class BabymonRecordingDelegate implements CameraRecordingDelegate {
 
   /** Called on service shutdown. */
   shutdown(): void {
-    if (this.session) {
-      this.session.closed = true;
-      this.teardown(this.session);
-      this.session = undefined;
+    const session = this.session;
+    if (session) {
+      session.closed = true;
+      this.finish(session, session.streamId);
     }
     this.options.prebuffer.stop();
   }

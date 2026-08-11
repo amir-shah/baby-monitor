@@ -119,3 +119,46 @@ class TestConversions:
     def test_round_trip(self):
         value = ms(2026, 8, 10, 19, 30)
         assert T.to_ms(T.from_ms(value, LA)) == value
+
+
+class TestSubHourDstGaps:
+    """Not every clock change is an hour.
+
+    Lord Howe Island moves by thirty minutes. Stepping a non-existent local
+    time forward by a fixed hour overshoots such a gap and lands past its end,
+    at which point the instant a night *starts* and the night an instant
+    *belongs to* stop agreeing — the one invariant the whole night_of scheme
+    rests on.
+    """
+
+    ZONE = "Australia/Lord_Howe"
+    #: 2026-10-04, 02:00 -> 02:30 local.
+    GAP_DATE = dt.date(2026, 10, 4)
+
+    def test_the_boundary_lands_on_the_end_of_the_gap_not_past_it(self):
+        zone = T.get_tz(self.ZONE)
+        naive = dt.datetime.combine(self.GAP_DATE, dt.time(2, 0), tzinfo=zone)
+        resolved = T.from_ms(T._resolve_local(naive, zone), zone)
+        assert (resolved.hour, resolved.minute) == (2, 30)
+
+    def test_a_night_starting_in_the_gap_still_contains_its_own_instants(self):
+        zone = T.get_tz(self.ZONE)
+        start, end = T.night_bounds(self.GAP_DATE.isoformat(), zone, 2)
+        for offset_h in (0, 1, 6, 12, 20):
+            moment = start + offset_h * 3_600_000
+            if moment >= end:
+                continue
+            assert T.night_of(moment, zone, 2) == self.GAP_DATE.isoformat()
+
+    def test_consecutive_nights_still_abut_exactly(self):
+        zone = T.get_tz(self.ZONE)
+        _, end = T.night_bounds(self.GAP_DATE.isoformat(), zone, 2)
+        next_start, _ = T.night_bounds(T.shift_night(self.GAP_DATE.isoformat(), 1), zone, 2)
+        assert end == next_start
+
+    def test_an_hour_wide_gap_is_still_handled(self):
+        # The ordinary case must not regress: US spring forward, 02:00 -> 03:00.
+        zone = T.get_tz("America/Los_Angeles")
+        naive = dt.datetime(2026, 3, 8, 2, 0, tzinfo=zone)
+        resolved = T.from_ms(T._resolve_local(naive, zone), zone)
+        assert (resolved.hour, resolved.minute) == (3, 0)

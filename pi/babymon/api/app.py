@@ -130,7 +130,7 @@ class IdempotencyCache:
 
 def create_app(config: Config, repos: Repos, runtime: Runtime) -> FastAPI:
     """Build the ASGI application over an already-open database and runtime."""
-    auth = AuthManager(config.api.auth)
+    auth = AuthManager(config.api.auth, repos.settings)
     ctx = AppContext(config=config, repos=repos, runtime=runtime, auth=auth)
 
     @asynccontextmanager
@@ -173,6 +173,22 @@ def _install_cors(app: FastAPI, config: Config) -> None:
     # cookie; that is also why the origin list is explicit and "*" is not
     # special-cased into it — a wildcard with credentials is both refused by
     # browsers and the wrong thing to want.
+    #
+    # Which is what the comment said while the code passed "*" straight
+    # through. Starlette then matches every origin and, because credentials are
+    # on, echoes it back in Access-Control-Allow-Origin — turning the browser's
+    # own refusal off and letting any page on the internet read a logged-in
+    # parent's camera. Dropped, loudly, rather than honoured.
+    wildcards = [o for o in origins if o == "*"]
+    if wildcards:
+        origins = [o for o in origins if o != "*"]
+        log.warning(
+            "api.cors_origins contains '*', which with cookie authentication would "
+            "let any site read this camera. Ignoring it; list the dashboard's "
+            "origins explicitly."
+        )
+        if not origins:
+            return
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,

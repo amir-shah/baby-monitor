@@ -451,3 +451,73 @@ def test_a_sliver_of_data_does_not_count_as_a_night_of_regularity(repos, child, 
         )
 
     assert builder._sri(child, keys[-1]) is None
+
+
+def test_a_manual_correction_replaces_the_detectors_version_of_those_minutes(repos, child):
+    """Keeping both puts the same minutes in the hypnogram twice.
+
+    A manual segment is the user saying "he was actually awake here". Writing
+    the detector's disagreeing view of the same interval alongside it counts
+    that sleep again — TST can exceed the sleep period containing it — and the
+    correction has no visible effect, which is the one thing it was for.
+    """
+    repos.segments.add_manual(child.id, NIGHT, at(2, day=11), at(2, 30, day=11), S.AWAKE)
+    repos.segments.replace_night(
+        child.id,
+        NIGHT,
+        [SleepSegment(0, child.id, NIGHT, at(19, 30), at(6, day=11), S.ASLEEP)],
+    )
+
+    rows = repos.segments.for_night(child.id, NIGHT)
+    total = sum(r.end_ms - r.start_ms for r in rows)
+    span = max(r.end_ms for r in rows) - min(r.start_ms for r in rows)
+    assert total == span, "the hypnogram must not cover the same minute twice"
+
+    awake = [r for r in rows if r.state is S.AWAKE]
+    assert len(awake) == 1
+    assert (awake[0].start_ms, awake[0].end_ms) == (at(2, day=11), at(2, 30, day=11))
+    # The detector's sleep is split around the correction rather than dropped.
+    assert len([r for r in rows if r.state is S.ASLEEP]) == 2
+
+
+def test_a_manual_correction_survives_repeated_recomputes(repos, child):
+    repos.segments.add_manual(child.id, NIGHT, at(2, day=11), at(2, 30, day=11), S.AWAKE)
+    for _ in range(3):
+        repos.segments.replace_night(
+            child.id,
+            NIGHT,
+            [SleepSegment(0, child.id, NIGHT, at(19, 30), at(6, day=11), S.ASLEEP)],
+        )
+    rows = repos.segments.for_night(child.id, NIGHT)
+    assert len([r for r in rows if r.source == "manual"]) == 1
+    assert len(rows) == 3
+
+
+class TestCarveOut:
+    @staticmethod
+    def carve(start, end, holes):
+        from babymon.storage.repo import _carve_out
+
+        return _carve_out(start, end, holes)
+
+    def test_no_holes_leaves_the_segment_whole(self):
+        assert self.carve(0, 100, []) == [(0, 100)]
+
+    def test_a_hole_in_the_middle_splits_it(self):
+        assert self.carve(0, 100, [(40, 60)]) == [(0, 40), (60, 100)]
+
+    def test_a_hole_covering_everything_leaves_nothing(self):
+        assert self.carve(0, 100, [(0, 100)]) == []
+
+    def test_overlapping_ends_are_trimmed(self):
+        assert self.carve(0, 100, [(80, 200)]) == [(0, 80)]
+        assert self.carve(0, 100, [(-50, 20)]) == [(20, 100)]
+
+    def test_a_hole_elsewhere_is_ignored(self):
+        assert self.carve(0, 100, [(200, 300)]) == [(0, 100)]
+
+    def test_several_holes_apply_in_turn(self):
+        assert self.carve(0, 100, [(20, 30), (60, 70)]) == [(0, 20), (30, 60), (70, 100)]
+
+    def test_an_empty_hole_changes_nothing(self):
+        assert self.carve(0, 100, [(50, 50)]) == [(0, 100)]
