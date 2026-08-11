@@ -61,3 +61,6 @@ config/*.local.yaml
 # component in isolation. It hardcodes absolute paths, so it is local-only.
 dashboard/.harness/
 dashboard/vite.harness.config.ts
+
+# Scratch probe scripts written during review; the real tests are test_*.py.
+pi/tests/__probe*.py
