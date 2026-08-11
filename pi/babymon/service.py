@@ -22,6 +22,7 @@ implements the :class:`~babymon.bus.Runtime` protocol.
 from __future__ import annotations
 
 import logging
+import shutil
 import threading
 import time
 from collections.abc import Iterator
@@ -32,7 +33,7 @@ from .audio.classifier import build_classifier
 from .audio.clips import ClipWriter
 from .audio.detector import SoundEvent, SoundEventDetector
 from .audio.dsp import AWeighting, NoiseFloor, analyse_frame
-from .bus import ComponentHealth, EventBus, Topic
+from .bus import MJPEG_BOUNDARY, ComponentHealth, EventBus, Topic
 from .config import Config
 from .env.sensors import ComfortEvaluator, Reading, build_sensor
 from .models import (
@@ -61,6 +62,10 @@ __all__ = ["SensingRuntime"]
 #: How often the night's hypnogram is checkpointed to the database. The upper
 #: bound on how much of a night an unexpected power cut can take with it.
 SEGMENT_FLUSH_MS = 5 * 60_000
+
+#: Free space on the data volume below which the health page goes red. Months
+#: of clips on a small card is the ordinary way this device stops working.
+LOW_DISK_MB = 200.0
 
 
 class SensingRuntime:
@@ -776,23 +781,69 @@ class SensingRuntime:
         return self.source.snapshot_jpeg(width, height)
 
     def mjpeg_stream(self, fps: float = 5.0, width: int | None = None) -> Iterator[bytes]:
-        """Multipart MJPEG for the dashboard preview."""
-        boundary = b"--frame\r\n"
-        interval = 1.0 / max(0.5, min(fps, 15.0))
-        while not self._stop.is_set():
-            jpeg = self.snapshot(width)
-            if jpeg:
-                yield boundary + b"Content-Type: image/jpeg\r\nContent-Length: " + str(
-                    len(jpeg)
-                ).encode() + b"\r\n\r\n" + jpeg + b"\r\n"
-            time.sleep(interval)
+        """Multipart MJPEG for the dashboard preview.
+
+        The separator comes from :data:`~babymon.bus.MJPEG_BOUNDARY`, the same
+        constant the response header is built from. They were written out
+        separately once and did not match, which no browser reports: the
+        preview is simply blank for ever.
+        """
+        if self.source is None:
+            return
+        boundary = f"--{MJPEG_BOUNDARY}\r\n".encode()
+        for jpeg in self.source.mjpeg_frames(self._stop, fps, width):
+            yield (
+                boundary
+                + b"Content-Type: image/jpeg\r\nContent-Length: "
+                + str(len(jpeg)).encode()
+                + b"\r\n\r\n"
+                + jpeg
+                + b"\r\n"
+            )
+        yield f"--{MJPEG_BOUNDARY}--\r\n".encode()
+
+    def _database_health(self) -> ComponentHealth:
+        """Whether the database can actually be read and written.
+
+        It used to report ``True`` unconditionally, which made the health page
+        agree that everything was fine in precisely the situation this device
+        is most likely to reach: an SD card with no room left. Sleep stops
+        being recorded, the page stays green, and the first sign of trouble is
+        a gap in the history weeks later.
+
+        The write probe is a rolled-back transaction — real enough to fail on a
+        full or read-only filesystem, and it leaves nothing behind.
+        """
+        extra: dict[str, Any] = {}
+        try:
+            extra["schema_version"] = self.repos.db.version()
+            with self.repos.db.transaction() as conn:
+                conn.execute("CREATE TEMP TABLE IF NOT EXISTS _health_probe (x INTEGER)")
+                conn.execute("INSERT INTO _health_probe (x) VALUES (1)")
+                conn.execute("DROP TABLE _health_probe")
+        except Exception as exc:
+            return ComponentHealth("database", False, str(exc), extra=extra)
+
+        try:
+            usage = shutil.disk_usage(self.config.paths.data_dir)
+            free_mb = usage.free / (1024 * 1024)
+            extra["disk_free_mb"] = round(free_mb, 1)
+            extra["disk_used_pct"] = round(100.0 * usage.used / usage.total, 1)
+            if free_mb < LOW_DISK_MB:
+                return ComponentHealth(
+                    "database",
+                    False,
+                    f"only {free_mb:.0f} MB left on the data volume; "
+                    "recording will stop when it fills",
+                    extra=extra,
+                )
+        except OSError as exc:
+            extra["disk_error"] = str(exc)
+
+        return ComponentHealth("database", True, extra=extra)
 
     def health(self) -> list[ComponentHealth]:
-        components = [
-            ComponentHealth(
-                "database", True, extra={"schema_version": self.repos.db.version()}
-            )
-        ]
+        components = [self._database_health()]
         if self.config.audio.enabled:
             status = self.capture.status() if self.capture else {"error": "not started"}
             components.append(

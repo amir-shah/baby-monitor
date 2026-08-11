@@ -39,15 +39,25 @@ def prune(config: Config, repos: Repos) -> dict[str, int]:
     now = now_ms()
     summary: dict[str, int] = {}
 
+    media_dir = Path(config.paths.media_dir)
+    removed = 0
+
     if retention.samples_days > 0:
         summary["samples_pruned"] = repos.samples.prune(now - retention.samples_days * DAY_MS)
     if retention.events_days > 0:
-        summary["events_pruned"] = repos.events.prune(now - retention.events_days * DAY_MS)
+        cutoff = now - retention.events_days * DAY_MS
+        # Before the events go, not after. media.event_id cascades, so pruning
+        # events first deletes the only record of where each clip lives and
+        # leaves the files on the card for ever — invisible to this pass and to
+        # every later one, until the card fills up and recording stops.
+        for item in repos.media.attached_to_events_before(cutoff):
+            _unlink(media_dir / item.rel_path)
+            repos.media.delete(item.id)
+            removed += 1
+        summary["events_pruned"] = repos.events.prune(cutoff)
     if retention.system_log_days > 0:
         summary["log_pruned"] = repos.syslog.prune(now - retention.system_log_days * DAY_MS)
 
-    media_dir = Path(config.paths.media_dir)
-    removed = 0
     for item in repos.media.expired(now, limit=5000):
         _unlink(media_dir / item.rel_path)
         repos.media.delete(item.id)

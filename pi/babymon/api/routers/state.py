@@ -30,6 +30,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response, StreamingResponse
 
+from ...bus import MJPEG_BOUNDARY as _MJPEG_BOUNDARY
 from ...bus import Topic
 from ...models import Child, LiveState
 from ...storage.repo import Repos
@@ -43,10 +44,10 @@ log = logging.getLogger(__name__)
 
 router = APIRouter(tags=["state"])
 
-#: The multipart boundary the MJPEG preview uses. Browsers do not care what it
-#: is, only that the parts and the header agree, so it is fixed here and the
-#: capture side formats its chunks against it.
-MJPEG_BOUNDARY = "babymonframe"
+#: Re-exported so existing imports keep working; defined next to the Runtime
+#: protocol because the runtime writes the parts and this module writes the
+#: header, and the two have to agree.
+MJPEG_BOUNDARY = _MJPEG_BOUNDARY
 
 
 # ---------------------------------------------------------------------------

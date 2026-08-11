@@ -1188,6 +1188,24 @@ class MediaRepo:
             )
         ]
 
+    def attached_to_events_before(self, cutoff_ms: int, limit: int = 5000) -> list[Media]:
+        """Media belonging to events that an events prune is about to remove.
+
+        ``media.event_id`` is ``ON DELETE CASCADE``, so pruning events takes
+        these rows with it — and the row is the only record of where the file
+        is. Deleted that way the clips stay on the card for ever, invisible to
+        every later pass, until the card fills. The pruner asks for them first
+        so the files go with the rows.
+        """
+        return [
+            self._row(r)
+            for r in self.db.query(
+                "SELECT m.* FROM media m JOIN events e ON e.id = m.event_id "
+                "WHERE e.start_ms < ? ORDER BY m.id LIMIT ?",
+                (cutoff_ms, limit),
+            )
+        ]
+
     def oldest(self, limit: int = 100) -> list[Media]:
         return [
             self._row(r)

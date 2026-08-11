@@ -33,6 +33,7 @@ import subprocess
 import threading
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
 
@@ -89,6 +90,25 @@ class VideoSource(ABC):
 
     def close(self) -> None:
         return None
+
+    def mjpeg_frames(
+        self, stop: threading.Event, fps: float = 5.0, width: int | None = None
+    ) -> Iterator[bytes]:
+        """JPEG frames for the dashboard preview, at roughly ``fps``.
+
+        The default encodes whatever frame the capture loop last stored, which
+        costs one JPEG encode and no process. Sources that can do better —
+        :class:`FfmpegSource`, whose stored frames are 320x240 grey — override
+        this rather than making :meth:`snapshot_jpeg` expensive, because that
+        one is called per frame.
+        """
+        interval = 1.0 / max(0.5, min(fps, 15.0))
+        while not stop.is_set():
+            jpeg = self.snapshot_jpeg(width)
+            if jpeg:
+                yield jpeg
+            if stop.wait(interval):
+                return
 
     def snapshot_jpeg(self, width: int | None = None, height: int | None = None) -> bytes | None:
         """Most recent frame as JPEG, scaled if asked."""
@@ -226,6 +246,57 @@ class FfmpegSource(VideoSource):
         if result.returncode != 0 or not result.stdout:
             return super().snapshot_jpeg(width, height)
         return result.stdout
+
+    def mjpeg_frames(
+        self, stop: threading.Event, fps: float = 5.0, width: int | None = None
+    ) -> Iterator[bytes]:
+        """One ffmpeg for the whole preview, not one per frame.
+
+        The inherited implementation would call :meth:`snapshot_jpeg`, and this
+        class's snapshot spawns a one-shot ffmpeg that opens its own RTSP
+        session — a full handshake, several times a second, for as long as
+        anybody has the dashboard open. On a Pi also encoding video and
+        classifying audio that is the difference between a preview and an
+        unusable machine.
+
+        A single process decodes once and emits a JPEG stream, which is what
+        the MJPEG endpoint wanted in the first place.
+        """
+        if shutil.which("ffmpeg") is None:
+            yield from super().mjpeg_frames(stop, fps, width)
+            return
+
+        rate = max(0.5, min(fps, 15.0))
+        scale = width or self.width
+        args = ["ffmpeg", "-hide_banner", "-loglevel", "error"]
+        if self.url.startswith("rtsp://"):
+            args += ["-rtsp_transport", self.rtsp_transport]
+        args += [
+            "-i", self.url,
+            "-an",
+            "-r", f"{rate:g}",
+            "-vf", f"scale={scale}:-2",
+            "-q:v", "5",
+            "-f", "mjpeg", "pipe:1",
+        ]
+
+        process: subprocess.Popen[bytes] | None = None
+        try:
+            process = subprocess.Popen(
+                args, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
+            )
+            if process.stdout is None:
+                return
+            yield from _split_jpegs(process.stdout, stop)
+        except OSError as exc:
+            log.warning("preview stream failed: %s", exc)
+        finally:
+            if process is not None:
+                process.terminate()
+                try:
+                    process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    process.kill()
 
     def close(self) -> None:
         if self._process is not None:
@@ -559,6 +630,39 @@ def build_source(config: Any) -> VideoSource:
             config.width, config.height, config.lores_width, config.lores_height
         )
     raise ValueError(f"unknown camera source {source!r}")
+
+
+#: JPEG start-of-image and end-of-image markers.
+_SOI = b"\xff\xd8"
+_EOI = b"\xff\xd9"
+
+
+def _split_jpegs(stream: Any, stop: threading.Event, chunk_size: int = 65536) -> Iterator[bytes]:
+    """Cut a concatenated MJPEG byte stream into individual JPEGs.
+
+    Scanning for the end-of-image marker is safe rather than merely convenient:
+    inside JPEG entropy-coded data every 0xFF byte is followed by 0x00 or by a
+    marker, so a bare FFD9 can only be the real end of an image.
+    """
+    buffer = bytearray()
+    while not stop.is_set():
+        chunk = stream.read(chunk_size)
+        if not chunk:
+            return
+        buffer.extend(chunk)
+        while True:
+            start = buffer.find(_SOI)
+            if start < 0:
+                # Keep the last byte: a read can end between the two bytes of
+                # the marker, and dropping it loses the frame that follows.
+                del buffer[: max(0, len(buffer) - (len(_SOI) - 1))]
+                break
+            end = buffer.find(_EOI, start + 2)
+            if end < 0:
+                del buffer[:start]  # keep the partial image, drop the noise
+                break
+            yield bytes(buffer[start : end + 2])
+            del buffer[: end + 2]
 
 
 def encode_jpeg(frame: Frame, width: int | None = None, height: int | None = None) -> bytes | None:

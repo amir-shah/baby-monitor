@@ -31,7 +31,20 @@ from .models import LiveState
 
 log = logging.getLogger(__name__)
 
-__all__ = ["ComponentHealth", "EventBus", "Message", "NullRuntime", "Runtime", "Topic"]
+__all__ = [
+    "MJPEG_BOUNDARY",
+    "ComponentHealth",
+    "EventBus",
+    "Message",
+    "NullRuntime",
+    "Runtime",
+    "Topic",
+]
+
+#: Multipart separator for the MJPEG preview. Browsers do not care what it
+#: says, only that the body and the Content-Type agree — so both sides take
+#: it from here rather than each spelling out their own.
+MJPEG_BOUNDARY = "babymonframe"
 
 
 class Topic(StrEnum):
@@ -223,7 +236,14 @@ class Runtime(Protocol):
         ...
 
     def mjpeg_stream(self, fps: float = 5.0, width: int | None = None) -> Iterator[bytes]:
-        """Multipart MJPEG chunks for the dashboard preview."""
+        """Multipart MJPEG chunks for the dashboard preview.
+
+        Parts are separated by :data:`MJPEG_BOUNDARY`, which the HTTP layer
+        must repeat in the ``Content-Type``. The two live in one place because
+        they silently disagreed once: the header advertised one boundary and
+        the body used another, so no browser could find a single frame and the
+        preview showed nothing at all, with no error anywhere to explain it.
+        """
         ...
 
     def health(self) -> list[ComponentHealth]:
